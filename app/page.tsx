@@ -427,7 +427,7 @@ export default function Home() {
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex flex-1 w-full max-w-6xl flex-col gap-6 py-12 px-6">
         <div>
-          <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Playable Preview Tool</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Playable Preview Tool</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             Upload thư mục build web-mobile của Cocos Creator để xem preview (build qua cli-single-html.js) và chỉnh
             sửa property/ảnh ngay trong trình duyệt.
@@ -441,10 +441,8 @@ export default function Home() {
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
-            dragOver
-              ? "border-zinc-900 bg-zinc-100 dark:border-zinc-100 dark:bg-zinc-900"
-              : "border-zinc-300 dark:border-zinc-700"
+          className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
+            dragOver ? "border-primary bg-primary-soft" : "border-zinc-300 dark:border-zinc-700"
           }`}
         >
           <p className="text-sm text-zinc-700 dark:text-zinc-300">
@@ -455,7 +453,7 @@ export default function Home() {
             type="button"
             disabled={isPacking}
             onClick={() => inputRef.current?.click()}
-            className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors hover:bg-[#383838] disabled:opacity-50 dark:hover:bg-[#ccc]"
+            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-white shadow-sm shadow-orange-900/10 transition-colors hover:bg-primary-hover disabled:opacity-50"
           >
             {isPacking ? "Đang xử lý..." : "Chọn thư mục"}
           </button>

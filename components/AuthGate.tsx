@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { PageLoading } from "./Spinner";
 import { Sidebar } from "./Sidebar";
 import { useAuthGate } from "./useAuthGate";
 
@@ -13,7 +14,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const { ready, isPublicRoute } = useAuthGate();
 
   if (!ready) {
-    return <main className="flex flex-1 items-center justify-center text-sm text-zinc-500">Đang tải...</main>;
+    return <PageLoading />;
   }
 
   if (isPublicRoute) return <>{children}</>;

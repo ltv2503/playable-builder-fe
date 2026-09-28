@@ -151,6 +151,7 @@ export function useAllGamesPage() {
 
   return {
     session,
+    isLoading: !!session && catalog === undefined && !swrError,
     isAdmin,
     search,
     setSearch,

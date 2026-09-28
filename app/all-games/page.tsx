@@ -4,20 +4,21 @@ import * as RadixDialog from "@radix-ui/react-dialog";
 import { Button, Card, Input } from "@/components/common";
 import { PageLoading, Spinner } from "@/components/Spinner";
 import { EmptyState } from "@/components/EmptyState";
-import { EditIcon, GamesIcon, PlusIcon, TrashIcon } from "@/components/icons";
+import { AndroidIcon, AppleIcon, DriveIcon, EditIcon, GamesIcon, GithubIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { useAllGamesPage } from "./useAllGamesPage";
 
 const CHECK_COLUMNS = [
-  { key: "androidUrl", label: "Android" },
-  { key: "iosUrl", label: "iOS" },
-  { key: "driveUrl", label: "Drive" },
-  { key: "githubPlayableUrl", label: "GH Playable" },
-  { key: "githubProductUrl", label: "GH Product" },
+  { key: "androidUrl", label: "Android", Icon: AndroidIcon, activeClass: "text-emerald-600 dark:text-emerald-400" },
+  { key: "iosUrl", label: "iOS", Icon: AppleIcon, activeClass: "text-zinc-700 dark:text-zinc-300" },
+  { key: "driveUrl", label: "Drive", Icon: DriveIcon, activeClass: "text-amber-500 dark:text-amber-400" },
+  { key: "githubPlayableUrl", label: "GH Playable", Icon: GithubIcon, activeClass: "text-zinc-900 dark:text-zinc-100" },
+  { key: "githubProductUrl", label: "GH Product", Icon: GithubIcon, activeClass: "text-zinc-900 dark:text-zinc-100" },
 ] as const;
 
 export default function AllGamesPage() {
   const {
     session,
+    isLoading,
     isAdmin,
     search,
     setSearch,
@@ -40,7 +41,7 @@ export default function AllGamesPage() {
     handleDelete,
   } = useAllGamesPage();
 
-  if (!session) return <PageLoading />;
+  if (!session || isLoading) return <PageLoading />;
 
   return (
     <main className="flex w-full flex-1 flex-col gap-6 px-8 py-10">
@@ -111,13 +112,28 @@ export default function AllGamesPage() {
                       </div>
                       <p className="text-[11px] text-zinc-500">{entry.packageName}</p>
                     </td>
-                    {CHECK_COLUMNS.map((c) => (
-                      <td key={c.key} className="py-2 text-center">
-                        <span className={entry[c.key] ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-300 dark:text-zinc-700"}>
-                          {entry[c.key] ? "✓" : "—"}
-                        </span>
-                      </td>
-                    ))}
+                    {CHECK_COLUMNS.map((c) => {
+                      const url = entry[c.key];
+                      return (
+                        <td key={c.key} className="py-2 text-center">
+                          {url ? (
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={c.label}
+                              className={`inline-flex rounded-lg p-1 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 ${c.activeClass}`}
+                            >
+                              <c.Icon className="h-6 w-6" />
+                            </a>
+                          ) : (
+                            <span title={c.label} className="inline-flex p-1 text-zinc-300 dark:text-zinc-700">
+                              <c.Icon className="h-6 w-6" />
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
                     <td className="py-2 text-center">
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${

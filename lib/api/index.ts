@@ -1,17 +1,18 @@
 /**
  * Typed client cho playable-builder (NestJS backend). Mọi route trừ
- * /auth/firebase đều cần Bearer token — xem lib/auth-context.tsx.
+ * /auth/firebase đều cần Bearer token — xem lib/auth/context.ts.
  *
  * CRUD (JSON) đi qua lib/api/axios.ts (axios + interceptor: tự đính token từ
  * cookie, tự logout khi 401). Các hàm tải blob (artifact/export/preview) vẫn
  * dùng fetch thẳng — axios với responseType:"blob" sẽ không đọc được message
  * lỗi JSON từ backend khi request thất bại, nên giữ nguyên fetch cho nhóm này.
  */
-import { apiDelete, apiGet, apiPatch, apiPost } from "./api/axios";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "./axios";
+import type { PermissionKeyDef } from "../auth/permissions";
 
-export { ApiError } from "./api/api-error";
+export { ApiError } from "./api-error";
 
-export type Role = "ADMIN" | "EDITOR" | "VIEWER";
+export type Role = "ADMIN" | "DEVELOP" | "UA" | "VIEWER";
 
 export interface ApiUser {
   id: string;
@@ -126,10 +127,20 @@ export const api = {
 
   listBuilds: (token: string, gameId: string) => apiGet<ApiBuild[]>(`/games/${gameId}/builds`, authHeader(token)),
   getBuild: (token: string, id: string) => apiGet<ApiBuild>(`/builds/${id}`, authHeader(token)),
-  uploadBuild: (token: string, gameId: string, name: string, file: File) => {
+  deleteBuild: (token: string, id: string) => apiDelete<void>(`/builds/${id}`, authHeader(token)),
+  renameBuild: (token: string, id: string, name: string) => apiPatch<ApiBuild>(`/builds/${id}`, { name }, authHeader(token)),
+  uploadBuild: (
+    token: string,
+    gameId: string,
+    name: string,
+    file: File,
+    options?: { pngMode?: "off" | "palette" | "webp"; noCompressPaths?: string[] },
+  ) => {
     const form = new FormData();
     form.append("name", name);
     form.append("file", file);
+    if (options?.pngMode) form.append("pngMode", options.pngMode);
+    if (options?.noCompressPaths?.length) form.append("noCompressPaths", JSON.stringify(options.noCompressPaths));
     return apiPost<ApiBuild>(`/games/${gameId}/builds`, form, authHeader(token));
   },
 
@@ -141,7 +152,21 @@ export const api = {
   getVariant: (token: string, id: string) => apiGet<ApiVariant>(`/variants/${id}`, authHeader(token)),
   updateVariantConfig: (token: string, id: string, config: PlaygroundConfig) =>
     apiPatch<ApiVariant>(`/variants/${id}`, { config }, authHeader(token)),
+  renameVariant: (token: string, id: string, name: string) => apiPatch<ApiVariant>(`/variants/${id}`, { name }, authHeader(token)),
   deleteVariant: (token: string, id: string) => apiDelete<void>(`/variants/${id}`, authHeader(token)),
+
+  getMyPermissions: (token: string) => apiGet<{ isAdmin: boolean; keys: string[] }>("/auth/me/permissions", authHeader(token)),
+
+  listUsers: (token: string) => apiGet<ApiUser[]>("/users", authHeader(token)),
+  updateUserRole: (token: string, id: string, role: Role) => apiPatch<ApiUser>(`/users/${id}/role`, { role }, authHeader(token)),
+
+  getPermissionsMatrix: (token: string) =>
+    apiGet<{ defs: PermissionKeyDef[]; editableRoles: Role[]; matrix: Record<string, string[]> }>(
+      "/admin/permissions",
+      authHeader(token),
+    ),
+  updatePermissionsMatrix: (token: string, matrix: Record<string, string[]>) =>
+    apiPut<{ ok: boolean }>("/admin/permissions", { matrix }, authHeader(token)),
 };
 
 /**

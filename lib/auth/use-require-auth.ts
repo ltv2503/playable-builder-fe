@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "./auth-context";
+import { useAuth } from "./context";
 
 /**
  * Redirect sang /login nếu chưa đăng nhập. Trả về null trong lúc đang tải/redirect — page nên render loading cho tới khi có user.
@@ -14,15 +14,22 @@ import { useAuth } from "./auth-context";
  * (mỗi lần setState xong lại re-render -> session mới -> effect chạy lại ->
  * setState...). Giữ nguyên reference khi user/accessToken không đổi mới an toàn.
  */
+// TEMP: yêu cầu login đang bị tắt tạm thời (theo yêu cầu người dùng).
+// Để bật lại: khôi phục bản gốc từ git (redirect sang /login khi !loading && !user).
+const AUTH_DISABLED = false;
+
 export function useRequireAuth() {
-  const { user, accessToken, loading } = useAuth();
+  const { user, accessToken, permissions, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
+    if (!AUTH_DISABLED && !loading && !user) router.replace("/login");
   }, [loading, user, router]);
 
-  const session = useMemo(() => (user && accessToken ? { user, accessToken } : null), [user, accessToken]);
+  const session = useMemo(
+    () => (user && accessToken ? { user, accessToken, permissions } : null),
+    [user, accessToken, permissions],
+  );
 
   if (loading) return null;
   return session;

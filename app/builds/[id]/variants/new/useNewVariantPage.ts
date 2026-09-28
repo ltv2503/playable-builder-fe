@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useRequireAuth } from "@/lib/use-require-auth";
+import { mutate } from "swr";
+import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { api } from "@/lib/api";
+import { swrKeys } from "@/lib/api/swr-keys";
 
 export function useNewVariantPage() {
   const { id: buildId } = useParams<{ id: string }>();
@@ -21,6 +23,11 @@ export function useNewVariantPage() {
     setError(null);
     try {
       const variant = await api.createVariant(session.accessToken, buildId, name);
+      // mutate(key) không kèm data/fetcher chỉ thật sự gọi lại API khi có 1
+      // useSWR(key) đang mounted lúc gọi — ở trang này thì không (danh sách
+      // biến thể nằm ở trang build detail, đã unmount). Phải tự truyền fetcher
+      // thì mutate mới có cách nào để lấy lại dữ liệu mới.
+      await mutate(swrKeys.variants(buildId), () => api.listVariants(session.accessToken, buildId));
       router.push(`/builds/${buildId}/variants/${variant.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

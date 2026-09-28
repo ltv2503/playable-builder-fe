@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { injectOverrides } from "@/lib/buildPreviewBlob";
-import { collectFromDataTransferItems, collectFromFileList, type CollectedFile } from "@/lib/collectFiles";
-import { injectPlaygroundConfig, type PlaygroundConfigOverride } from "@/lib/playgroundConfig";
+import { injectOverrides } from "@/lib/cocos/buildPreviewBlob";
+import { collectFromDataTransferItems, collectFromFileList, type CollectedFile } from "@/lib/cocos/collectFiles";
+import { injectPlaygroundConfig, type PlaygroundConfigOverride } from "@/lib/cocos/playgroundConfig";
 import {
   applyLiveEdit,
   applyLiveAudioEdit,
@@ -17,7 +17,7 @@ import {
   type OverrideEntry,
   type PlayableWindow,
   type PropertyInfo,
-} from "@/lib/sceneInspector";
+} from "@/lib/cocos/sceneInspector";
 
 type Status =
   | { kind: "idle" }

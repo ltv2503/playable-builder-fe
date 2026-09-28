@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth } from "@/lib/auth/context";
 
 export interface SidebarNavItem {
-  id: "preview" | "games";
+  id: "preview" | "games" | "admin";
   label: string;
   href: string;
 }
@@ -14,6 +14,8 @@ const NAV_ITEMS: SidebarNavItem[] = [
   { id: "preview", label: "Preview local", href: "/" },
   { id: "games", label: "Games", href: "/games" },
 ];
+
+const ADMIN_NAV_ITEM: SidebarNavItem = { id: "admin", label: "Quản trị", href: "/admin" };
 
 /** Riêng của trình duyệt người dùng đó, không cần đồng bộ server — localStorage là đủ. */
 const COLLAPSE_STORAGE_KEY = "playable_sidebar_collapsed";
@@ -52,5 +54,7 @@ export function useSidebar() {
     router.replace("/login");
   };
 
-  return { user, navItems: NAV_ITEMS, isActive, handleLogout, collapsed, toggleCollapsed };
+  const navItems = user?.role === "ADMIN" ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
+
+  return { user, navItems, isActive, handleLogout, collapsed, toggleCollapsed };
 }

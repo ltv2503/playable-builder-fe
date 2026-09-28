@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRightIcon, GamesIcon, LogoutIcon, PreviewIcon } from "./icons";
+import { ChevronRightIcon, GamesIcon, LogoutIcon, PreviewIcon, ShieldIcon } from "./icons";
 import { useSidebar, type SidebarNavItem } from "./useSidebar";
 
 const ICONS: Record<SidebarNavItem["id"], typeof PreviewIcon> = {
   preview: PreviewIcon,
   games: GamesIcon,
+  admin: ShieldIcon,
 };
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Admin",
-  EDITOR: "Editor",
+  DEVELOP: "Develop",
+  UA: "UA",
   VIEWER: "Viewer",
 };
 

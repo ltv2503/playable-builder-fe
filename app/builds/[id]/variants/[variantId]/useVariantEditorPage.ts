@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useRequireAuth } from "@/lib/use-require-auth";
-import { api, fetchArtifactBlob, type ApiBuild, type ApiVariant, type PlaygroundConfig } from "@/lib/api";
-import { injectPlaygroundConfig, type PlaygroundConfigOverride } from "@/lib/playgroundConfig";
+import useSWR from "swr";
+import { api, fetchArtifactBlob, type PlaygroundConfig } from "@/lib/api";
+import { useRequireAuth } from "@/lib/auth/use-require-auth";
+import { injectPlaygroundConfig, type PlaygroundConfigOverride } from "@/lib/cocos/playgroundConfig";
+import { canOnResource } from "@/lib/auth/permissions";
+import { swrKeys } from "@/lib/api/swr-keys";
 
 /** Debounce trước khi reload preview — gõ số/text không bị giật lại mỗi phím. */
 const PREVIEW_DEBOUNCE_MS = 500;
@@ -23,8 +26,15 @@ export function useVariantEditorPage() {
   const { id: buildId, variantId } = useParams<{ id: string; variantId: string }>();
   const session = useRequireAuth();
 
-  const [build, setBuild] = useState<ApiBuild | null>(null);
-  const [variant, setVariant] = useState<ApiVariant | null>(null);
+  // Cùng key với useBuildDetailPage's swrKeys.build — vào thẳng trang này (không qua
+  // trang chi tiết concept trước) vẫn phải fetch, nhưng lần sau quay lại thì dùng cache chung.
+  const { data: build, error: buildError } = useSWR(session ? swrKeys.build(buildId) : null, () =>
+    api.getBuild(session!.accessToken, buildId),
+  );
+  const { data: variant, mutate: mutateVariant } = useSWR(session ? swrKeys.variant(variantId) : null, () =>
+    api.getVariant(session!.accessToken, variantId),
+  );
+
   const [baseHtml, setBaseHtml] = useState<string | null>(null);
   const [config, setConfig] = useState<PlaygroundConfig>({});
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -34,36 +44,37 @@ export function useVariantEditorPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // Tải build (để lấy fieldsRegistry + bản single-html demo) + variant (config hiện tại) — 1 lần lúc vào trang.
+  // Seed config từ variant đúng 1 lần mỗi khi ĐỔI variant (không phải mỗi lần SWR
+  // revalidate variant hiện tại — nếu không sẽ đè mất chỉnh sửa đang gõ dở).
   useEffect(() => {
-    if (!session) return;
+    if (variant) setConfig(variant.config);
+  }, [variant?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tải bản single-html gốc để demo preview — chỉ cần 1 lần khi build đã SUCCESS.
+  useEffect(() => {
+    if (!session || !build) return;
+    if (buildError) {
+      setLoadError(buildError instanceof Error ? buildError.message : String(buildError));
+      return;
+    }
     let cancelled = false;
-
-    (async () => {
-      try {
-        const [b, v] = await Promise.all([api.getBuild(session.accessToken, buildId), api.getVariant(session.accessToken, variantId)]);
-        if (cancelled) return;
-        setBuild(b);
-        setVariant(v);
-        setConfig(v.config);
-
-        const single = b.artifacts.find((a) => a.channelName === "single");
-        if (b.status !== "SUCCESS" || !single) {
-          setLoadError("Concept chưa build xong hoặc không có bản single-html để preview.");
-          return;
-        }
-        const blob = await fetchArtifactBlob(session.accessToken, buildId, single.id);
-        if (cancelled) return;
-        setBaseHtml(await blob.text());
-      } catch (e) {
+    const single = build.artifacts.find((a) => a.channelName === "single");
+    if (build.status !== "SUCCESS" || !single) {
+      setLoadError("Concept chưa build xong hoặc không có bản single-html để preview.");
+      return;
+    }
+    fetchArtifactBlob(session.accessToken, buildId, single.id)
+      .then((blob) => blob.text())
+      .then((text) => {
+        if (!cancelled) setBaseHtml(text);
+      })
+      .catch((e) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-
+      });
     return () => {
       cancelled = true;
     };
-  }, [session, buildId, variantId]);
+  }, [session, build, buildError, buildId]);
 
   // Mỗi lần config đổi (kể cả lần đầu, sau khi baseHtml về) -> vá lại preview, debounce.
   useEffect(() => {
@@ -79,7 +90,7 @@ export function useVariantEditorPage() {
     return () => clearTimeout(timer);
   }, [baseHtml, config]);
 
-  const canEdit = session?.user.role === "ADMIN" || session?.user.role === "EDITOR";
+  const canEdit = !!variant && canOnResource(session?.permissions ?? null, "variant", "edit", variant.createdById, session?.user.id);
 
   const handleSave = async () => {
     if (!session) return;
@@ -88,7 +99,7 @@ export function useVariantEditorPage() {
     setSaved(false);
     try {
       const updated = await api.updateVariantConfig(session.accessToken, variantId, config);
-      setVariant(updated);
+      mutateVariant(updated, { revalidate: false });
       setSaved(true);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
@@ -97,5 +108,19 @@ export function useVariantEditorPage() {
     }
   };
 
-  return { session, buildId, build, variant, config, setConfig, previewUrl, loadError, canEdit, saving, saveError, saved, handleSave };
+  return {
+    session,
+    buildId,
+    build: build ?? null,
+    variant: variant ?? null,
+    config,
+    setConfig,
+    previewUrl,
+    loadError,
+    canEdit,
+    saving,
+    saveError,
+    saved,
+    handleSave,
+  };
 }

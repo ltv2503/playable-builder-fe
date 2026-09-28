@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
-import { runCliScript, writeFormFilesToDir, injectPlaygroundConfigIntoOutputDir } from "@/lib/serverBuild";
+import { runCliScript, writeFormFilesToDir, injectPlaygroundConfigIntoOutputDir } from "@/lib/server/serverBuild";
 
 /**
  * Wraps the sibling playable-builder package's existing dist/cli-ad-networks.js

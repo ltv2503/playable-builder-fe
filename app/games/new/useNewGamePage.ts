@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useRequireAuth } from "@/lib/use-require-auth";
+import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { api, fetchIconFromAndroidUrl } from "@/lib/api";
 
 const COMBINING_DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");

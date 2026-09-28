@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AuthProvider } from "@/lib/auth-context";
+import { Providers } from "@/components/Providers";
 import { AuthGate } from "@/components/AuthGate";
 import "./globals.css";
 
@@ -26,9 +26,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AuthProvider>
+        <Providers>
           <AuthGate>{children}</AuthGate>
-        </AuthProvider>
+        </Providers>
       </body>
     </html>
   );

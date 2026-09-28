@@ -1,23 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRequireAuth } from "@/lib/use-require-auth";
-import { api, ApiGame } from "@/lib/api";
+import useSWR from "swr";
+import { useRequireAuth } from "@/lib/auth/use-require-auth";
+import { api } from "@/lib/api";
+import { can } from "@/lib/auth/permissions";
+import { swrKeys } from "@/lib/api/swr-keys";
 
 export function useGamesPage() {
   const session = useRequireAuth();
-  const [games, setGames] = useState<ApiGame[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!session) return;
-    api
-      .listGames(session.accessToken)
-      .then(setGames)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [session]);
+  const { data: games, error: swrError } = useSWR(
+    session ? swrKeys.games() : null,
+    () => api.listGames(session!.accessToken),
+  );
 
-  const canCreate = session?.user.role === "ADMIN" || session?.user.role === "EDITOR";
+  const canCreate = can(session?.permissions ?? null, "game:manage");
+  const error = swrError ? (swrError instanceof Error ? swrError.message : String(swrError)) : null;
 
-  return { session, games, error, canCreate };
+  return { session, games: games ?? null, error, canCreate };
 }

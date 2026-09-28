@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useRequireAuth } from "@/lib/use-require-auth";
-import { api, ApiBuild, ApiGame } from "@/lib/api";
+import useSWR from "swr";
+import { useRequireAuth } from "@/lib/auth/use-require-auth";
+import { api, ApiBuild } from "@/lib/api";
+import { can, canOnResource } from "@/lib/auth/permissions";
+import { swrKeys } from "@/lib/api/swr-keys";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -15,33 +17,52 @@ export function useGameDetailPage() {
   const { id: gameId } = useParams<{ id: string }>();
   const session = useRequireAuth();
 
-  const [game, setGame] = useState<ApiGame | null>(null);
-  const [builds, setBuilds] = useState<ApiBuild[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: game, error: gameError } = useSWR(session ? swrKeys.game(gameId) : null, () =>
+    api.getGame(session!.accessToken, gameId),
+  );
 
-  const refreshBuilds = useCallback(async () => {
+  const {
+    data: builds,
+    error: buildsError,
+    mutate: mutateBuilds,
+  } = useSWR(session ? swrKeys.builds(gameId) : null, () => api.listBuilds(session!.accessToken, gameId), {
+    // Poll trong lúc còn concept đang PENDING/PROCESSING (BullMQ job chạy nền,
+    // không có websocket ở bản MVP này) — tự tắt poll ngay khi không còn build nào đang chạy.
+    refreshInterval: (data) => (data?.some(isInFlight) ? POLL_INTERVAL_MS : 0),
+  });
+
+  const firstError = gameError ?? buildsError;
+  const error = firstError ? (firstError instanceof Error ? firstError.message : String(firstError)) : null;
+
+  const canCreate = can(session?.permissions ?? null, "concept:create");
+
+  const canEditBuild = (build: ApiBuild) =>
+    canOnResource(session?.permissions ?? null, "concept", "edit", build.createdById, session?.user.id);
+  const canDeleteBuild = (build: ApiBuild) =>
+    canOnResource(session?.permissions ?? null, "concept", "delete", build.createdById, session?.user.id);
+
+  const deleteBuild = async (buildId: string) => {
     if (!session) return;
-    const list = await api.listBuilds(session.accessToken, gameId);
-    setBuilds(list);
-  }, [session, gameId]);
+    await api.deleteBuild(session.accessToken, buildId);
+    mutateBuilds((prev) => prev?.filter((b) => b.id !== buildId), { revalidate: false });
+  };
 
-  useEffect(() => {
+  const renameBuild = async (buildId: string, name: string) => {
     if (!session) return;
-    api
-      .getGame(session.accessToken, gameId)
-      .then(setGame)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-    refreshBuilds().catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [session, gameId, refreshBuilds]);
+    const updated = await api.renameBuild(session.accessToken, buildId, name);
+    mutateBuilds((prev) => prev?.map((b) => (b.id === buildId ? updated : b)), { revalidate: false });
+  };
 
-  // Poll trong lúc còn concept đang PENDING/PROCESSING (BullMQ job chạy nền, không có websocket ở bản MVP này).
-  useEffect(() => {
-    if (!builds?.some(isInFlight)) return;
-    const timer = setInterval(() => refreshBuilds().catch(() => undefined), POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [builds, refreshBuilds]);
-
-  const canCreate = session?.user.role === "ADMIN" || session?.user.role === "EDITOR";
-
-  return { session, gameId, game, builds, error, canCreate };
+  return {
+    session,
+    gameId,
+    game: game ?? null,
+    builds: builds ?? null,
+    error,
+    canCreate,
+    canEditBuild,
+    canDeleteBuild,
+    deleteBuild,
+    renameBuild,
+  };
 }

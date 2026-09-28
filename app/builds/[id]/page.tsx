@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button, Card } from "@/components/common";
+import { Button, Card, PromptDialog } from "@/components/common";
 import { EmptyState } from "@/components/EmptyState";
 import { PageLoading, Spinner } from "@/components/Spinner";
-import { ArrowLeftIcon, ChevronRightIcon, LayersIcon, PlusIcon, PreviewIcon, RocketIcon } from "@/components/icons";
+import { ArrowLeftIcon, ChevronRightIcon, EditIcon, LayersIcon, PlusIcon, PreviewIcon, RocketIcon, TrashIcon } from "@/components/icons";
 import { useBuildDetailPage } from "./useBuildDetailPage";
+
+type RenameTarget = { kind: "build" } | { kind: "variant"; id: string; name: string };
 
 export default function BuildDetailPage() {
   const {
@@ -15,7 +18,12 @@ export default function BuildDetailPage() {
     build,
     variants,
     error,
-    canEdit,
+    canCreateVariant,
+    canExport,
+    canEditThisBuild,
+    canDeleteThisBuild,
+    canEditVariant,
+    canDeleteVariant,
     networks,
     selectedNetworks,
     toggleNetwork,
@@ -26,7 +34,45 @@ export default function BuildDetailPage() {
     exporting,
     exportError,
     handleExport,
+    deleteVariant,
+    renameVariant,
+    deleteBuild,
+    renameBuild,
   } = useBuildDetailPage();
+
+  const [deletingBuild, setDeletingBuild] = useState(false);
+  const [deletingVariantId, setDeletingVariantId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+
+  const handleDeleteBuild = async () => {
+    if (!build || !confirm(`Xoá concept "${build.name}"? Mọi biến thể và bản build của nó cũng sẽ bị xoá.`)) return;
+    setDeletingBuild(true);
+    try {
+      await deleteBuild();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+      setDeletingBuild(false);
+    }
+  };
+
+  const handleDeleteVariant = async (e: React.MouseEvent, variantId: string, name: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Xoá biến thể "${name}"?`)) return;
+    setDeletingVariantId(variantId);
+    try {
+      await deleteVariant(variantId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeletingVariantId(null);
+    }
+  };
+
+  const handleRenameSubmit = (name: string) => {
+    if (!renameTarget) return Promise.resolve();
+    return renameTarget.kind === "build" ? renameBuild(name) : renameVariant(renameTarget.id, name);
+  };
 
   if (!session) return <PageLoading />;
   if (!build && !error) return <PageLoading />;
@@ -40,21 +86,39 @@ export default function BuildDetailPage() {
 
   return (
     <main className="flex w-full flex-1 flex-col gap-6 px-8 py-10">
-      <div>
-        <Link
-          href={`/games/${build.gameId}`}
-          className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-        >
-          <ArrowLeftIcon className="h-3.5 w-3.5" />
-          Quay lại game
-        </Link>
-        <div className="mt-1 flex flex-wrap items-center gap-2.5">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{build.name}</h1>
-          <StatusBadge status={build.status} />
+      <div className="flex items-start justify-between">
+        <div>
+          <Link
+            href={`/games/${build.gameId}`}
+            className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+          >
+            <ArrowLeftIcon className="h-3.5 w-3.5" />
+            Quay lại game
+          </Link>
+          <div className="mt-1 flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{build.name}</h1>
+            <StatusBadge status={build.status} />
+            {canEditThisBuild && (
+              <button
+                type="button"
+                onClick={() => setRenameTarget({ kind: "build" })}
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                title="Đổi tên concept"
+              >
+                <EditIcon className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">
+            {build.engineVersion} · Cập nhật {new Date(build.updatedAt).toLocaleString("vi-VN")}
+          </p>
         </div>
-        <p className="mt-1 text-xs text-zinc-500">
-          {build.engineVersion} · Cập nhật {new Date(build.updatedAt).toLocaleString("vi-VN")}
-        </p>
+        {canDeleteThisBuild && (
+          <Button variant="danger" size="sm" onClick={handleDeleteBuild} loading={deletingBuild}>
+            <TrashIcon className="h-4 w-4" />
+            Xoá concept
+          </Button>
+        )}
       </div>
 
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -89,7 +153,7 @@ export default function BuildDetailPage() {
         )}
         {downloadError && <p className="text-xs text-red-600 dark:text-red-400">{downloadError}</p>}
 
-        {build.status === "SUCCESS" && networks.length > 0 && (
+        {build.status === "SUCCESS" && networks.length > 0 && canExport && (
           <Card className="flex flex-col gap-4">
             <div className="flex items-center gap-2">
               <RocketIcon className="h-5 w-5 text-primary" />
@@ -154,7 +218,7 @@ export default function BuildDetailPage() {
               <LayersIcon className="h-5 w-5 text-zinc-400" />
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Biến thể</h2>
             </div>
-            {canEdit && build.status === "SUCCESS" && (
+            {canCreateVariant && build.status === "SUCCESS" && (
               <Link
                 href={`/builds/${buildId}/variants/new`}
                 className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-orange-900/10 hover:bg-primary-hover"
@@ -176,22 +240,56 @@ export default function BuildDetailPage() {
           {variants && variants.length > 0 && (
             <div className="flex flex-col divide-y divide-zinc-100 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm shadow-zinc-900/5 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
               {variants.map((variant) => (
-                <Link
+                <div
                   key={variant.id}
-                  href={`/builds/${buildId}/variants/${variant.id}`}
-                  className="group flex items-center justify-between px-4 py-3.5 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+                  className="group relative flex items-center justify-between px-4 py-3.5 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
                 >
-                  <span className="font-medium text-zinc-900 dark:text-zinc-50">{variant.name}</span>
+                  <Link href={`/builds/${buildId}/variants/${variant.id}`} className="absolute inset-0" aria-label={variant.name} />
+                  <span className="pointer-events-none font-medium text-zinc-900 dark:text-zinc-50">{variant.name}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">{new Date(variant.updatedAt).toLocaleString("vi-VN")}</span>
-                    <ChevronRightIcon className="h-4 w-4 text-zinc-300 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-400" />
+                    <span className="pointer-events-none text-xs text-zinc-500">{new Date(variant.updatedAt).toLocaleString("vi-VN")}</span>
+                    <ChevronRightIcon className="pointer-events-none h-4 w-4 text-zinc-300 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-400" />
+                    {canEditVariant(variant) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setRenameTarget({ kind: "variant", id: variant.id, name: variant.name });
+                        }}
+                        className="relative z-10 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                        title="Đổi tên biến thể"
+                      >
+                        <EditIcon className="h-4 w-4" />
+                      </button>
+                    )}
+                    {canDeleteVariant(variant) && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteVariant(e, variant.id, variant.name)}
+                        disabled={deletingVariantId === variant.id}
+                        className="relative z-10 rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                        title="Xoá biến thể"
+                      >
+                        {deletingVariantId === variant.id ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
+                      </button>
+                    )}
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           )}
         </div>
       </div>
+
+      <PromptDialog
+        open={renameTarget !== null}
+        onOpenChange={(open) => !open && setRenameTarget(null)}
+        title={renameTarget?.kind === "build" ? "Đổi tên concept" : "Đổi tên biến thể"}
+        label={renameTarget?.kind === "build" ? "Tên concept" : "Tên biến thể"}
+        initialValue={renameTarget?.kind === "build" ? build.name : (renameTarget?.name ?? "")}
+        onSubmit={handleRenameSubmit}
+      />
     </main>
   );
 }

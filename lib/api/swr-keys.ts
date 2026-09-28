@@ -7,6 +7,7 @@
 export const swrKeys = {
   games: () => "games",
   game: (id: string) => `game:${id}`,
+  gameCatalog: () => "game-catalog",
   builds: (gameId: string) => `builds:${gameId}`,
   build: (id: string) => `build:${id}`,
   variants: (buildId: string) => `variants:${buildId}`,

@@ -8,8 +8,16 @@ import { runCliScript, writeFormFilesToDir, injectPlaygroundConfigIntoOutputDir 
  * Wraps the sibling playable-builder package's existing dist/cli-ad-networks.js
  * (the real, per-ad-network packer, built from
  * playable-builder/src/pipeline/builder.ts's buildAdNetworks()) rather than
- * reimplementing it. We only materialize an input folder for it to read: the
- * uploaded files as-is.
+ * reimplementing it.
+ *
+ * Preferred path: a `singleHtml` form field carrying the already-built
+ * single-html string (app/page.tsx already built it once for the preview via
+ * /api/preview — see baseHtmlRef there). cli-ad-networks.js can rebuild every
+ * ad-network output straight from that file (it embeds the fully processed
+ * resource bundle already — obfuscated JS, compressed images, ...), so this
+ * skips re-uploading the whole raw folder and re-running the heavy
+ * obfuscate/compress step a second time. Falls back to materializing the
+ * uploaded raw files (old behaviour) when `singleHtml` isn't provided.
  *
  * The optional `overrides` form field (JSON `{groupKey,propName,value}[]` —
  * same shape lib/playgroundConfig.ts builds for the live preview, covering
@@ -65,6 +73,7 @@ async function addDirToZip(zip: JSZip, dir: string, base: string): Promise<void>
 
 export async function POST(request: Request) {
   let inputDir: string | null = null;
+  let singleHtmlFile: string | null = null;
   let outputDir: string | null = null;
   try {
     const form = await request.formData();
@@ -79,15 +88,25 @@ export async function POST(request: Request) {
       }
     }
 
-    inputDir = await fs.mkdtemp(path.join(os.tmpdir(), "playable-export-in-"));
     outputDir = await fs.mkdtemp(path.join(os.tmpdir(), "playable-export-out-"));
 
-    await writeFormFilesToDir(form, inputDir);
-    if (!(await fs.stat(path.join(inputDir, "index.html")).catch(() => null))) {
-      return Response.json({ error: "Không thấy index.html trong dữ liệu upload." }, { status: 400 });
+    const singleHtml = form.get("singleHtml");
+    let buildInput: string;
+    if (typeof singleHtml === "string" && singleHtml.length > 0) {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "playable-export-html-"));
+      singleHtmlFile = path.join(dir, "single.html");
+      await fs.writeFile(singleHtmlFile, singleHtml, "utf-8");
+      buildInput = singleHtmlFile;
+    } else {
+      inputDir = await fs.mkdtemp(path.join(os.tmpdir(), "playable-export-in-"));
+      await writeFormFilesToDir(form, inputDir);
+      if (!(await fs.stat(path.join(inputDir, "index.html")).catch(() => null))) {
+        return Response.json({ error: "Không thấy index.html trong dữ liệu upload." }, { status: 400 });
+      }
+      buildInput = inputDir;
     }
 
-    await runCliScript(BUILD_SCRIPT, [inputDir, outputDir]);
+    await runCliScript(BUILD_SCRIPT, [buildInput, outputDir]);
     await injectPlaygroundConfigIntoOutputDir(outputDir, toConfigObject(overrides));
 
     const zip = new JSZip();
@@ -110,6 +129,7 @@ export async function POST(request: Request) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   } finally {
     if (inputDir) await fs.rm(inputDir, { recursive: true, force: true }).catch(() => {});
+    if (singleHtmlFile) await fs.rm(path.dirname(singleHtmlFile), { recursive: true, force: true }).catch(() => {});
     if (outputDir) await fs.rm(outputDir, { recursive: true, force: true }).catch(() => {});
   }
 }

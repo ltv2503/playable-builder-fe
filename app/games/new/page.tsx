@@ -2,29 +2,13 @@
 
 import Link from "next/link";
 import { Button, Card, Input } from "@/components/common";
-import { ArrowLeftIcon, UploadCloudIcon } from "@/components/icons";
-import { PageLoading, Spinner } from "@/components/Spinner";
+import { ArrowLeftIcon, GamesIcon } from "@/components/icons";
+import { PageLoading } from "@/components/Spinner";
+import { EmptyState } from "@/components/EmptyState";
 import { useNewGamePage } from "./useNewGamePage";
 
 export default function NewGamePage() {
-  const {
-    session,
-    name,
-    slug,
-    androidUrl,
-    iosUrl,
-    icon,
-    iconPreview,
-    fetchingIcon,
-    handleIconFileChange,
-    submitting,
-    error,
-    handleNameChange,
-    handleSlugChange,
-    setAndroidUrl,
-    setIosUrl,
-    handleSubmit,
-  } = useNewGamePage();
+  const { session, search, setSearch, filteredCatalog, catalogLoading, catalogError, addingId, handleAddFromCatalog } = useNewGamePage();
 
   if (!session) return <PageLoading />;
 
@@ -35,71 +19,62 @@ export default function NewGamePage() {
           <ArrowLeftIcon className="h-3.5 w-3.5" />
           Games
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Tạo game mới</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Thêm game</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          Chọn từ danh sách{" "}
+          <Link href="/all-games" className="font-medium text-primary hover:underline">
+            All Games
+          </Link>{" "}
+          của công ty. Chưa thấy game cần thêm? Nhờ Admin thêm vào All Games trước.
+        </p>
       </div>
 
-      <Card padding="lg" className="mx-auto w-full max-w-lg">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Icon</span>
-            <label
-              className={`relative flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-colors ${
-                icon
-                  ? "border-primary/40 bg-primary-soft"
-                  : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-600"
-              }`}
-            >
-              {fetchingIcon ? (
-                <Spinner className="h-6 w-6" />
-              ) : iconPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={iconPreview} alt="Icon preview" className="h-full w-full object-cover" />
-              ) : (
-                <UploadCloudIcon className="h-7 w-7 text-zinc-400" />
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleIconFileChange(e.target.files?.[0] ?? null)}
-                className="hidden"
-              />
-            </label>
-            {fetchingIcon && <span className="text-xs text-zinc-500">Đang lấy icon từ Google Play...</span>}
-          </label>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm theo tên hoặc package name..." className="max-w-sm" />
 
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Tên game</span>
-            <Input required value={name} onChange={(e) => handleNameChange(e.target.value)} placeholder="vd: Brick Jam" />
-          </label>
+        {catalogError && <p className="text-sm text-red-600 dark:text-red-400">{catalogError}</p>}
 
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Slug</span>
-            <Input required value={slug} onChange={(e) => handleSlugChange(e.target.value)} pattern="[a-z0-9-]+" className="font-mono" />
-          </label>
+        {catalogLoading && <PageLoading />}
 
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Link Android (Google Play)</span>
-            <Input
-              type="url"
-              value={androidUrl}
-              onChange={(e) => setAndroidUrl(e.target.value)}
-              placeholder="https://play.google.com/store/apps/details?id=..."
-            />
-            <span className="text-xs text-zinc-400">Dán link Play Store để tự lấy icon app.</span>
-          </label>
+        {!catalogLoading && filteredCatalog.length === 0 && (
+          <EmptyState
+            icon={<GamesIcon className="h-10 w-10" />}
+            title={search ? "Không tìm thấy game nào" : "Không còn game nào để thêm"}
+            description={search ? "Thử từ khoá khác." : "Mọi game trong danh sách công ty đã được thêm vào đây rồi."}
+          />
+        )}
 
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Link iOS (App Store)</span>
-            <Input type="url" value={iosUrl} onChange={(e) => setIosUrl(e.target.value)} placeholder="https://apps.apple.com/app/..." />
-          </label>
-
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-          <Button type="submit" loading={submitting} className="mt-2 self-start">
-            {submitting ? "Đang tạo..." : "Tạo game"}
-          </Button>
-        </form>
-      </Card>
+        {filteredCatalog.length > 0 && (
+          <Card padding="sm" className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {filteredCatalog.map((entry) => (
+              <div key={entry.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                {entry.iconUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={entry.iconUrl} alt={entry.name} className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                ) : (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-sm font-bold text-zinc-400 dark:bg-zinc-800">
+                    {entry.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">{entry.name}</p>
+                  <p className="truncate text-xs text-zinc-500">{entry.packageName}</p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  loading={addingId === entry.id}
+                  disabled={addingId !== null && addingId !== entry.id}
+                  onClick={() => handleAddFromCatalog(entry.id)}
+                >
+                  Thêm
+                </Button>
+              </div>
+            ))}
+          </Card>
+        )}
+      </div>
     </main>
   );
 }

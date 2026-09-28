@@ -5,17 +5,22 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
 
 export interface SidebarNavItem {
-  id: "preview" | "games" | "admin";
+  id: "preview" | "games" | "all-games" | "admin";
   label: string;
   href: string;
 }
 
 const NAV_ITEMS: SidebarNavItem[] = [
-  { id: "preview", label: "Preview local", href: "/" },
+  { id: "preview", label: "Preview local", href: "/preview-local" },
   { id: "games", label: "Games", href: "/games" },
+  { id: "all-games", label: "All Games", href: "/all-games" },
 ];
 
-const ADMIN_NAV_ITEM: SidebarNavItem = { id: "admin", label: "Quản trị", href: "/admin" };
+const ADMIN_NAV_ITEM: SidebarNavItem = {
+  id: "admin",
+  label: "Quản trị",
+  href: "/admin",
+};
 
 /** Riêng của trình duyệt người dùng đó, không cần đồng bộ server — localStorage là đủ. */
 const COLLAPSE_STORAGE_KEY = "playable_sidebar_collapsed";
@@ -47,14 +52,16 @@ export function useSidebar() {
     });
   };
 
-  const isActive = (href: string): boolean => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const isActive = (href: string): boolean =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   const handleLogout = async () => {
     await logout();
     router.replace("/login");
   };
 
-  const navItems = user?.role === "ADMIN" ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
+  const navItems =
+    user?.role === "ADMIN" ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
 
   return { user, navItems, isActive, handleLogout, collapsed, toggleCollapsed };
 }

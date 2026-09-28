@@ -20,6 +20,8 @@ export interface ApiUser {
   email: string;
   name: string;
   avatarUrl: string | null;
+  /** Phương thức đăng nhập Firebase, vd "google.com"; null với user cũ chưa đăng nhập lại. */
+  provider: string | null;
   role: Role;
   createdAt: string;
   updatedAt: string;
@@ -31,10 +33,45 @@ export interface ApiGame {
   slug: string;
   androidUrl: string | null;
   iosUrl: string | null;
+  packageName: string | null;
   iconUrl: string | null;
   ownerId: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 1 row "tất cả game của công ty" (import từ file JSON export ngoài, xem playable-builder/src/scripts/seed-game-catalog.ts). */
+export interface ApiGameCatalogEntry {
+  id: string;
+  externalId: string | null;
+  name: string;
+  shortName: string | null;
+  packageName: string;
+  iconUrl: string | null;
+  androidUrl: string | null;
+  iosUrl: string | null;
+  driveUrl: string | null;
+  githubPlayableUrl: string | null;
+  githubProductUrl: string | null;
+  priority: number | null;
+  inhouse: boolean;
+  sourceCreatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateGameCatalogEntryInput {
+  name: string;
+  packageName: string;
+  shortName?: string;
+  iconUrl?: string;
+  androidUrl?: string;
+  iosUrl?: string;
+  driveUrl?: string;
+  githubPlayableUrl?: string;
+  githubProductUrl?: string;
+  priority?: number;
+  inhouse?: boolean;
 }
 
 export type ArtifactKind = "HTML" | "ZIP";
@@ -109,21 +146,22 @@ export const api = {
   me: (token: string) => apiGet<ApiUser>("/auth/me", authHeader(token)),
 
   listGames: (token: string) => apiGet<ApiGame[]>("/games", authHeader(token)),
-  createGame: (
-    token: string,
-    data: { name: string; slug: string; androidUrl?: string; iosUrl?: string; icon?: File },
-  ) => {
-    const form = new FormData();
-    form.append("name", data.name);
-    form.append("slug", data.slug);
-    if (data.androidUrl) form.append("androidUrl", data.androidUrl);
-    if (data.iosUrl) form.append("iosUrl", data.iosUrl);
-    if (data.icon) form.append("icon", data.icon);
-    return apiPost<ApiGame>("/games", form, authHeader(token));
-  },
   getGame: (token: string, id: string) => apiGet<ApiGame>(`/games/${id}`, authHeader(token)),
   updateGame: (token: string, id: string, data: Partial<{ name: string; androidUrl: string; iosUrl: string }>) =>
     apiPatch<ApiGame>(`/games/${id}`, data, authHeader(token)),
+
+  listGameCatalog: (token: string) => apiGet<ApiGameCatalogEntry[]>("/game-catalog", authHeader(token)),
+  createGameFromCatalog: (token: string, catalogEntryId: string) =>
+    apiPost<ApiGame>("/games/from-catalog", { catalogEntryId }, authHeader(token)),
+  /** Các hàm dưới đây chỉ Admin gọi được (RolesGuard phía backend) — trang "All Games". */
+  createGameCatalogEntry: (token: string, data: CreateGameCatalogEntryInput) =>
+    apiPost<ApiGameCatalogEntry>("/game-catalog", data, authHeader(token)),
+  updateGameCatalogEntry: (token: string, id: string, data: Partial<CreateGameCatalogEntryInput>) =>
+    apiPatch<ApiGameCatalogEntry>(`/game-catalog/${id}`, data, authHeader(token)),
+  deleteGameCatalogEntry: (token: string, id: string) => apiDelete<void>(`/game-catalog/${id}`, authHeader(token)),
+  /** Đọc icon URL + tên thẳng từ link Play Store (JSON, không tải bytes) — auto-fill form Thêm/Sửa ở All Games. */
+  fetchGameCatalogIconMeta: (token: string, androidUrl: string) =>
+    apiGet<{ iconUrl: string; name: string | null }>(`/game-catalog/icon-from-url?url=${encodeURIComponent(androidUrl)}`, authHeader(token)),
 
   listBuilds: (token: string, gameId: string) => apiGet<ApiBuild[]>(`/games/${gameId}/builds`, authHeader(token)),
   getBuild: (token: string, id: string) => apiGet<ApiBuild>(`/builds/${id}`, authHeader(token)),
@@ -246,28 +284,3 @@ export async function openVariantPreview(token: string, variantId: string): Prom
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-/**
- * Lấy icon + tên app thẳng từ link Google Play (backend đọc trang Play Store)
- * — dùng để tự điền icon/tên khi user vừa dán link Android lúc tạo/sửa game,
- * đỡ phải tự tìm ảnh/gõ tên tay. `file` dùng lại đúng luồng upload icon hiện
- * có (api.createGame's `icon`); `name` đọc từ header "X-App-Name" (backend
- * trả icon dạng binary nên không gửi tên qua JSON được).
- */
-export async function fetchIconFromAndroidUrl(
-  token: string,
-  androidUrl: string,
-): Promise<{ file: File; name: string | null }> {
-  const res = await fetch(`${API_URL}/games/icon-from-url?url=${encodeURIComponent(androidUrl)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.message || `Không lấy được icon (HTTP ${res.status})`);
-  }
-  const rawName = res.headers.get("X-App-Name");
-  const name = rawName ? decodeURIComponent(rawName) : null;
-  const blob = await res.blob();
-  const ext = blob.type.split("/")[1]?.split("+")[0] || "png";
-  const file = new File([blob], `icon.${ext}`, { type: blob.type });
-  return { file, name };
-}

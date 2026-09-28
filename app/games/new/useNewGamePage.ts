@@ -1,142 +1,70 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import useSWR, { mutate } from "swr";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
-import { api, fetchIconFromAndroidUrl } from "@/lib/api";
+import { api } from "@/lib/api";
+import { swrKeys } from "@/lib/api/swr-keys";
 
-const COMBINING_DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
-const ICON_FETCH_DEBOUNCE_MS = 600;
-
-function slugify(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(COMBINING_DIACRITICS, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
-function isGooglePlayUrl(url: string): boolean {
-  try {
-    return new URL(url).hostname === "play.google.com";
-  } catch {
-    return false;
-  }
-}
-
+/**
+ * Chọn từ "All Games" (tất cả game của công ty, xem app/all-games) — không còn
+ * cho tự nhập tay nữa, game phải có sẵn trong danh sách đó mới thêm được. Ai
+ * cần bổ sung game chưa có trong danh sách thì vào All Games (chỉ Admin thêm được).
+ */
 export function useNewGamePage() {
   const session = useRequireAuth();
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [androidUrl, setAndroidUrl] = useState("");
-  const [iosUrl, setIosUrl] = useState("");
-  const [icon, setIcon] = useState<File | null>(null);
-  const [iconPreview, setIconPreview] = useState<string | null>(null);
-  /** "manual" = user tự chọn ảnh -> không tự động ghi đè nữa; "auto" = do tool tự lấy từ link Android. */
-  const [iconSource, setIconSource] = useState<"manual" | "auto" | null>(null);
-  /** Tương tự iconSource nhưng cho tên game — chỉ tự điền khi user chưa tự gõ tên. */
-  const [nameSource, setNameSource] = useState<"manual" | "auto" | null>(null);
-  const [fetchingIcon, setFetchingIcon] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Preview cục bộ (chưa upload) — thu hồi object URL cũ mỗi khi đổi ảnh/rời trang.
-  useEffect(() => {
-    if (!icon) {
-      setIconPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(icon);
-    setIconPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [icon]);
+  const [search, setSearch] = useState("");
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
-  // Tự lấy icon + tên từ link Google Play khi user dán/nhập link — chỉ khi chưa tự chọn/gõ tay.
-  useEffect(() => {
-    if (!session || (iconSource === "manual" && nameSource === "manual") || !isGooglePlayUrl(androidUrl)) return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      setFetchingIcon(true);
-      fetchIconFromAndroidUrl(session.accessToken, androidUrl)
-        .then(({ file, name: fetchedName }) => {
-          if (cancelled) return;
-          if (iconSource !== "manual") {
-            setIcon(file);
-            setIconSource("auto");
-          }
-          if (nameSource !== "manual" && fetchedName) {
-            setName(fetchedName);
-            if (!slugTouched) setSlug(slugify(fetchedName));
-            setNameSource("auto");
-          }
-        })
-        .catch(() => undefined) // lấy không được thì im lặng, không chặn form
-        .finally(() => {
-          if (!cancelled) setFetchingIcon(false);
-        });
-    }, ICON_FETCH_DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [androidUrl, session, iconSource, nameSource, slugTouched]);
+  const { data: catalog, error: catalogSwrError } = useSWR(session ? swrKeys.gameCatalog() : null, () =>
+    api.listGameCatalog(session!.accessToken),
+  );
+  const { data: games } = useSWR(session ? swrKeys.games() : null, () => api.listGames(session!.accessToken));
 
-  const handleNameChange = (value: string) => {
-    setName(value);
-    setNameSource(value ? "manual" : null);
-    if (!slugTouched) setSlug(slugify(value));
-  };
+  /** packageName của game đã có trong danh sách của mình — ẩn khỏi bảng chọn (đã thêm rồi thì thôi). */
+  const addedPackageNames = useMemo(() => new Set((games ?? []).map((g) => g.packageName).filter((p): p is string => !!p)), [games]);
 
-  const handleSlugChange = (value: string) => {
-    setSlug(value);
-    setSlugTouched(true);
-  };
+  const filteredCatalog = useMemo(() => {
+    const list = (catalog ?? []).filter((entry) => !addedPackageNames.has(entry.packageName));
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (entry) => entry.name.toLowerCase().includes(q) || entry.packageName.toLowerCase().includes(q) || entry.shortName?.toLowerCase().includes(q),
+    );
+  }, [catalog, addedPackageNames, search]);
 
-  const handleIconFileChange = (file: File | null) => {
-    setIcon(file);
-    setIconSource(file ? "manual" : null);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddFromCatalog = async (catalogEntryId: string) => {
     if (!session) return;
-    setSubmitting(true);
-    setError(null);
+    setAddingId(catalogEntryId);
+    setCatalogError(null);
     try {
-      const game = await api.createGame(session.accessToken, {
-        name,
-        slug: slug || slugify(name),
-        androidUrl: androidUrl || undefined,
-        iosUrl: iosUrl || undefined,
-        icon: icon || undefined,
-      });
+      const game = await api.createGameFromCatalog(session.accessToken, catalogEntryId);
+      // Trang này rồi sẽ điều hướng đi ngay — truyền fetcher để mutate() chắc chắn
+      // lấy lại được dữ liệu mới dù subscriber (useSWR ở trên) có unmount trước
+      // khi revalidate xong hay không (xem cùng pattern ở useNewConceptPage.ts).
+      await mutate(swrKeys.games(), () => api.listGames(session.accessToken));
       router.push(`/games/${game.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setSubmitting(false);
+      setCatalogError(e instanceof Error ? e.message : String(e));
+      setAddingId(null);
     }
   };
+
+  const catalogErrorMessage =
+    catalogError ?? (catalogSwrError ? (catalogSwrError instanceof Error ? catalogSwrError.message : String(catalogSwrError)) : null);
 
   return {
     session,
-    name,
-    slug,
-    androidUrl,
-    iosUrl,
-    icon,
-    iconPreview,
-    fetchingIcon,
-    handleIconFileChange,
-    submitting,
-    error,
-    handleNameChange,
-    handleSlugChange,
-    setAndroidUrl,
-    setIosUrl,
-    handleSubmit,
+    search,
+    setSearch,
+    filteredCatalog,
+    catalogLoading: !!session && !catalog && !catalogSwrError,
+    catalogError: catalogErrorMessage,
+    addingId,
+    handleAddFromCatalog,
   };
 }

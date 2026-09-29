@@ -1,7 +1,7 @@
 "use client";
 
 import * as RadixDialog from "@radix-ui/react-dialog";
-import { Button, Card, Input } from "@/components/common";
+import { Button, Card, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/common";
 import { PageLoading, Spinner } from "@/components/Spinner";
 import { EmptyState } from "@/components/EmptyState";
 import { AndroidIcon, AppleIcon, DriveIcon, EditIcon, GamesIcon, GithubIcon, PlusIcon, TrashIcon } from "@/components/icons";
@@ -76,26 +76,28 @@ export default function AllGamesPage() {
 
         {filteredCatalog.length > 0 && (
           <Card padding="sm" className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-zinc-100 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800">
-                  <th className="w-10 py-2 pr-2">#</th>
-                  <th className="w-12 py-2 pr-2">Icon</th>
-                  <th className="py-2 pr-2">Game</th>
+            <Table className="min-w-225">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">#</TableHead>
+                  <TableHead className="w-12">Icon</TableHead>
+                  <TableHead>Game</TableHead>
                   {CHECK_COLUMNS.map((c) => (
-                    <th key={c.key} className="w-20 py-2 text-center">
+                    <TableHead key={c.key} align="center" className="w-20">
                       {c.label}
-                    </th>
+                    </TableHead>
                   ))}
-                  <th className="w-24 py-2 text-center">Trạng thái</th>
-                  {isAdmin && <th className="w-20 py-2 text-right">&nbsp;</th>}
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead align="center" className="w-24">
+                    Trạng thái
+                  </TableHead>
+                  {isAdmin && <TableHead align="right" className="w-20" />}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredCatalog.map((entry, index) => (
-                  <tr key={entry.id} className="border-b border-zinc-50 last:border-0 dark:border-zinc-900">
-                    <td className="py-2 pr-2 text-xs font-semibold text-zinc-400">{index + 1}</td>
-                    <td className="py-2 pr-2">
+                  <TableRow key={entry.id}>
+                    <TableCell className="text-xs font-semibold text-zinc-400">{index + 1}</TableCell>
+                    <TableCell>
                       {entry.iconUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={entry.iconUrl} alt={entry.name} className="h-9 w-9 rounded-lg object-cover" />
@@ -104,18 +106,18 @@ export default function AllGamesPage() {
                           {entry.name.charAt(0).toUpperCase()}
                         </div>
                       )}
-                    </td>
-                    <td className="py-2 pr-2">
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-zinc-900 dark:text-zinc-50">{entry.name}</span>
                         {entry.shortName && <span className="text-[11px] font-semibold text-primary">({entry.shortName})</span>}
                       </div>
                       <p className="text-[11px] text-zinc-500">{entry.packageName}</p>
-                    </td>
+                    </TableCell>
                     {CHECK_COLUMNS.map((c) => {
                       const url = entry[c.key];
                       return (
-                        <td key={c.key} className="py-2 text-center">
+                        <TableCell key={c.key} align="center">
                           {url ? (
                             <a
                               href={url}
@@ -131,10 +133,10 @@ export default function AllGamesPage() {
                               <c.Icon className="h-6 w-6" />
                             </span>
                           )}
-                        </td>
+                        </TableCell>
                       );
                     })}
-                    <td className="py-2 text-center">
+                    <TableCell align="center">
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                           entry.inhouse
@@ -144,9 +146,9 @@ export default function AllGamesPage() {
                       >
                         {entry.inhouse ? "Inhouse" : "Publish"}
                       </span>
-                    </td>
+                    </TableCell>
                     {isAdmin && (
-                      <td className="py-2 text-right">
+                      <TableCell align="right">
                         <div className="flex justify-end gap-1">
                           <button
                             type="button"
@@ -165,12 +167,12 @@ export default function AllGamesPage() {
                             <TrashIcon className="h-4 w-4" />
                           </button>
                         </div>
-                      </td>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </Card>
         )}
       </div>

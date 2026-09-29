@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import { api, fetchArtifactBlob, type PlaygroundConfig } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
@@ -76,6 +76,7 @@ export function useVariantEditorPage() {
   }>();
 
   const session = useRequireAuth();
+  const router = useRouter();
 
   // ------------------------------------------------------------
   // Device preview
@@ -209,6 +210,7 @@ export function useVariantEditorPage() {
       });
 
       setSaved(true);
+      router.push(`/builds/${buildId}`);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
     } finally {

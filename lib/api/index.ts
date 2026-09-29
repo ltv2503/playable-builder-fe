@@ -88,6 +88,17 @@ export interface ApiBuildArtifact {
   createdAt: string;
 }
 
+/** Khớp PlaygroundFieldType/PlaygroundFieldTypeInfo ở playable-builder/src/pipeline/playgroundFields.ts. */
+export type PlaygroundFieldType = "boolean" | "integer" | "float" | "number" | "string" | "color";
+
+export interface PlaygroundFieldTypeInfo {
+  type: PlaygroundFieldType;
+  slider?: boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
 /** Khớp PlaygroundMatch ở playable-builder/src/pipeline/playgroundFields.ts. */
 export interface PlaygroundMatch {
   kind: "field" | "asset";
@@ -97,6 +108,8 @@ export interface PlaygroundMatch {
   options: { section?: string; [key: string]: unknown };
   defaultLiteral: { start: number; end: number; value: unknown } | null;
   assetKind: string | null;
+  /** Chỉ có ở kind "field" (null ở "asset") — dùng để PlaygroundConfigForm dựng đúng input. */
+  fieldType: PlaygroundFieldTypeInfo | null;
 }
 
 export interface PlaygroundFieldsRegistry {

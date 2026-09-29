@@ -86,13 +86,13 @@ export default function VariantEditorPage() {
   }
 
   return (
-    <main className="flex flex-1 flex-col gap-4 bg-zinc-50 px-6 py-5 dark:bg-black">
+    <main className="flex h-full min-h-0 flex-col gap-4 bg-zinc-50 px-6 py-5 dark:bg-black">
 
       {/* ------------------------------------------------------ */}
       {/* Header */}
       {/* ------------------------------------------------------ */}
 
-      <div className="flex items-center justify-between">
+      <div className="flex shrink-0 items-center justify-between">
         <div>
           <Link
             href={`/builds/${buildId}`}
@@ -139,7 +139,7 @@ export default function VariantEditorPage() {
 
 
       {loadError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+        <div className="shrink-0 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           {loadError}
         </div>
       )}

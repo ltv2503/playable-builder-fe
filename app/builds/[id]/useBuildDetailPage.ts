@@ -57,6 +57,12 @@ export function useBuildDetailPage() {
     setSelectedNetworks((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   };
 
+  const allNetworksSelected = (networks?.length ?? 0) > 0 && selectedNetworks.length === networks?.length;
+
+  const toggleAllNetworks = () => {
+    setSelectedNetworks((prev) => (prev.length === (networks?.length ?? 0) ? [] : [...(networks ?? [])]));
+  };
+
   const handleDownloadSingle = async () => {
     if (!session || !build) return;
     setDownloadError(null);
@@ -120,6 +126,8 @@ export function useBuildDetailPage() {
     networks: networks ?? [],
     selectedNetworks,
     toggleNetwork,
+    allNetworksSelected,
+    toggleAllNetworks,
     selectedVariantId,
     setSelectedVariantId,
     downloadError,

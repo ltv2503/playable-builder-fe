@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button, Card, PromptDialog } from "@/components/common";
+import { Button, Card, Checkbox, PromptDialog } from "@/components/common";
 import { EmptyState } from "@/components/EmptyState";
 import { PageLoading, Spinner } from "@/components/Spinner";
 import { ArrowLeftIcon, ChevronRightIcon, EditIcon, LayersIcon, PlusIcon, PreviewIcon, RocketIcon, TrashIcon } from "@/components/icons";
@@ -27,6 +27,8 @@ export default function BuildDetailPage() {
     networks,
     selectedNetworks,
     toggleNetwork,
+    allNetworksSelected,
+    toggleAllNetworks,
     selectedVariantId,
     setSelectedVariantId,
     downloadError,
@@ -176,6 +178,14 @@ export default function BuildDetailPage() {
               </select>
             </label>
 
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-500">Ad network</span>
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                <Checkbox className="h-3.5 w-3.5" checked={allNetworksSelected} onChange={toggleAllNetworks} />
+                Chọn tất cả
+              </label>
+            </div>
+
             <div className="flex flex-wrap gap-2">
               {networks.map((network) => (
                 <label
@@ -186,12 +196,7 @@ export default function BuildDetailPage() {
                       : "border-zinc-200 text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
                   }`}
                 >
-                  <input
-                    type="checkbox"
-                    className="hidden"
-                    checked={selectedNetworks.includes(network)}
-                    onChange={() => toggleNetwork(network)}
-                  />
+                  <Checkbox className="hidden" checked={selectedNetworks.includes(network)} onChange={() => toggleNetwork(network)} />
                   {network}
                 </label>
               ))}

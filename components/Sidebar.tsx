@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRightIcon, GamesIcon, LayersIcon, LogoutIcon, PreviewIcon, ShieldIcon } from "./icons";
+import { ChevronRightIcon, GamesIcon, LayersIcon, LogoutIcon, ShieldIcon } from "./icons";
 import { useSidebar, type SidebarNavItem } from "./useSidebar";
 
-const ICONS: Record<SidebarNavItem["id"], typeof PreviewIcon> = {
-  preview: PreviewIcon,
+const ICONS: Record<SidebarNavItem["id"], typeof GamesIcon> = {
   games: GamesIcon,
   "all-games": LayersIcon,
   admin: ShieldIcon,

@@ -4,9 +4,9 @@
  * boolean) property in a built single-html already reads its default from
  * `window.__playgroundConfig[groupKey][propName]` (falling back to the
  * field's own original default when absent — see that function's doc
- * comment). So applying an edit here never needs another server round-trip
- * through /api/preview — it's just a small standalone script re-injected
- * into the *same* already-built html, reloaded fresh so the config is read
+ * comment). So applying an edit here never needs another server round-trip —
+ * it's just a small standalone script re-injected into the *same*
+ * already-built html, reloaded fresh so the config is read
  * before the target class ever runs (no onLoad()/start()-timing race, since
  * this script runs synchronously before any — necessarily async-loaded —
  * game module).
@@ -14,7 +14,8 @@
  * `groupKey` = the field's @playgroundField `section` option when given
  * (e.g. "Background Music"), else the component's class name — see
  * playgroundGroupKey() in src/pipeline/playgroundFields.ts, which this must
- * mirror exactly (callers here already do: see splitOverrides in app/page.tsx).
+ * mirror exactly (see groupKey() in components/usePlaygroundConfigForm.ts, which
+ * builds the `PlaygroundConfig` object this file's caller — useVariantEditorPage.ts — passes in).
  * Note a section name is a human-friendly UI-grouping label, not guaranteed
  * unique — two different classes CAN share a section, in which case their
  * fields land under the same config key (accepted tradeoff, not a bug).

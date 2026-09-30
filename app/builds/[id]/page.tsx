@@ -3,10 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button, Card, Checkbox, PromptDialog } from "@/components/common";
+import { Button, Card, Checkbox, Dialog, Input, PromptDialog } from "@/components/common";
 import { EmptyState } from "@/components/EmptyState";
 import { PageLoading, Spinner } from "@/components/Spinner";
-import { ArrowLeftIcon, ChevronRightIcon, EditIcon, LayersIcon, PlusIcon, PreviewIcon, RocketIcon, TrashIcon } from "@/components/icons";
+import {
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  DuplicateIcon,
+  EditIcon,
+  LayersIcon,
+  PlusIcon,
+  PreviewIcon,
+  RocketIcon,
+  ShareIcon,
+  TrashIcon,
+} from "@/components/icons";
 import { useBuildDetailPage } from "./useBuildDetailPage";
 
 type RenameTarget = { kind: "build" } | { kind: "variant"; id: string; name: string };
@@ -20,6 +31,7 @@ export default function BuildDetailPage() {
     error,
     canCreateVariant,
     canExport,
+    canShare,
     canEditThisBuild,
     canDeleteThisBuild,
     canEditVariant,
@@ -29,22 +41,52 @@ export default function BuildDetailPage() {
     toggleNetwork,
     allNetworksSelected,
     toggleAllNetworks,
-    selectedVariantId,
-    setSelectedVariantId,
+    selectedVariantIds,
+    toggleVariant,
+    allVariantsSelected,
+    toggleAllVariants,
     downloadError,
     handleDownloadSingle,
+    shareLink,
+    sharing,
+    shareError,
+    handleCreateShareLink,
+    handleRevokeShareLink,
     exporting,
     exportError,
     handleExport,
     deleteVariant,
     renameVariant,
+    duplicateVariant,
     deleteBuild,
     renameBuild,
   } = useBuildDetailPage();
 
   const [deletingBuild, setDeletingBuild] = useState(false);
   const [deletingVariantId, setDeletingVariantId] = useState<string | null>(null);
+  const [duplicatingVariantId, setDuplicatingVariantId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const shareUrl = shareLink && typeof window !== "undefined" ? `${window.location.origin}/share/${shareLink.token}` : null;
+
+  const handleOpenShareDialog = () => {
+    setShareDialogOpen(true);
+    if (!shareLink) handleCreateShareLink();
+  };
+
+  const handleCopyShareUrl = async () => {
+    if (!shareUrl) return;
+    await navigator.clipboard.writeText(shareUrl);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
+
+  const handleRevokeAndClose = async () => {
+    await handleRevokeShareLink();
+    setShareDialogOpen(false);
+  };
 
   const handleDeleteBuild = async () => {
     if (!build || !confirm(`Xoá concept "${build.name}"? Mọi biến thể và bản build của nó cũng sẽ bị xoá.`)) return;
@@ -68,6 +110,19 @@ export default function BuildDetailPage() {
       alert(err instanceof Error ? err.message : String(err));
     } finally {
       setDeletingVariantId(null);
+    }
+  };
+
+  const handleDuplicateVariant = async (e: React.MouseEvent, variantId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDuplicatingVariantId(variantId);
+    try {
+      await duplicateVariant(variantId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDuplicatingVariantId(null);
     }
   };
 
@@ -148,9 +203,17 @@ export default function BuildDetailPage() {
                 <p className="text-xs text-zinc-500">Xem thử nhanh, chưa vá config nào</p>
               </div>
             </div>
-            <Button variant="secondary" size="sm" onClick={handleDownloadSingle}>
-              Xem
-            </Button>
+            <div className="flex items-center gap-2">
+              {canShare && (
+                <Button variant="secondary" size="sm" onClick={handleOpenShareDialog}>
+                  <ShareIcon className="h-4 w-4" />
+                  Share
+                </Button>
+              )}
+              <Button variant="secondary" size="sm" onClick={handleDownloadSingle}>
+                Xem
+              </Button>
+            </div>
           </Card>
         )}
         {downloadError && <p className="text-xs text-red-600 dark:text-red-400">{downloadError}</p>}
@@ -162,21 +225,30 @@ export default function BuildDetailPage() {
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Export cho ad network</h2>
             </div>
 
-            <label className="flex flex-col gap-1.5 text-xs">
-              <span className="font-medium text-zinc-500">Dùng config của</span>
-              <select
-                value={selectedVariantId}
-                onChange={(e) => setSelectedVariantId(e.target.value)}
-                className="rounded-lg border border-zinc-300 px-2.5 py-2 text-sm text-zinc-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              >
-                <option value="">Mặc định (engine)</option>
-                {variants?.map((v) => (
-                  <option key={v.id} value={v.id}>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-zinc-500">Dùng config của (mỗi cái export riêng 1 file/zip)</span>
+                <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  <Checkbox className="h-3.5 w-3.5" checked={allVariantsSelected} onChange={toggleAllVariants} />
+                  Chọn tất cả
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[{ id: "", name: "Mặc định (engine)" }, ...(variants ?? [])].map((v) => (
+                  <label
+                    key={v.id}
+                    className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      selectedVariantIds.includes(v.id)
+                        ? "border-primary/30 bg-primary-soft text-primary-hover dark:text-orange-300"
+                        : "border-zinc-200 text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                    }`}
+                  >
+                    <Checkbox className="hidden" checked={selectedVariantIds.includes(v.id)} onChange={() => toggleVariant(v.id)} />
                     {v.name}
-                  </option>
+                  </label>
                 ))}
-              </select>
-            </label>
+              </div>
+            </div>
 
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-zinc-500">Ad network</span>
@@ -208,11 +280,13 @@ export default function BuildDetailPage() {
               variant="outline"
               size="sm"
               onClick={handleExport}
-              disabled={selectedNetworks.length === 0}
+              disabled={selectedNetworks.length === 0 || selectedVariantIds.length === 0}
               loading={exporting}
               className="self-start"
             >
-              {exporting ? "Đang build..." : `Export (${selectedNetworks.length || 0})`}
+              {exporting
+                ? "Đang build..."
+                : `Export (${selectedNetworks.length || 0} network × ${selectedVariantIds.length || 0} config)`}
             </Button>
           </Card>
         )}
@@ -254,6 +328,17 @@ export default function BuildDetailPage() {
                   <div className="flex items-center gap-2">
                     <span className="pointer-events-none text-xs text-zinc-500">{new Date(variant.updatedAt).toLocaleString("vi-VN")}</span>
                     <ChevronRightIcon className="pointer-events-none h-4 w-4 text-zinc-300 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-400" />
+                    {canCreateVariant && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleDuplicateVariant(e, variant.id)}
+                        disabled={duplicatingVariantId === variant.id}
+                        className="relative z-10 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                        title="Nhân bản biến thể"
+                      >
+                        {duplicatingVariantId === variant.id ? <Spinner className="h-4 w-4" /> : <DuplicateIcon className="h-4 w-4" />}
+                      </button>
+                    )}
                     {canEditVariant(variant) && (
                       <button
                         type="button"
@@ -295,6 +380,35 @@ export default function BuildDetailPage() {
         initialValue={renameTarget?.kind === "build" ? build.name : (renameTarget?.name ?? "")}
         onSubmit={handleRenameSubmit}
       />
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} title="Link xem công khai">
+        {sharing && !shareLink && (
+          <div className="flex items-center gap-2 text-sm text-zinc-500">
+            <Spinner className="h-4 w-4" />
+            Đang tạo link...
+          </div>
+        )}
+
+        {shareError && <p className="text-sm text-red-600 dark:text-red-400">{shareError}</p>}
+
+        {shareUrl && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-zinc-500">
+              Ai có link này đều xem được (không cần đăng nhập), hết hạn ngày{" "}
+              {shareLink?.expiresAt && new Date(shareLink.expiresAt).toLocaleString("vi-VN")}.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={shareUrl} onFocus={(e) => e.target.select()} className="flex-1 font-mono text-xs" />
+              <Button type="button" variant="outline" size="sm" onClick={handleCopyShareUrl}>
+                {linkCopied ? "Đã copy" : "Copy"}
+              </Button>
+            </div>
+            <Button type="button" variant="danger" size="sm" onClick={handleRevokeAndClose} loading={sharing} className="self-start">
+              Thu hồi link
+            </Button>
+          </div>
+        )}
+      </Dialog>
     </main>
   );
 }

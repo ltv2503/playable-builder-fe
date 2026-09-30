@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
-import { api, fetchArtifactBlob, type PlaygroundConfig } from "@/lib/api";
+import { api, fetchArtifactBlob, type ApiSharedPreviewLink, type PlaygroundConfig } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import {
   injectPlaygroundConfig,
   type PlaygroundConfigOverride,
 } from "@/lib/cocos/playgroundConfig";
-import { canOnResource } from "@/lib/auth/permissions";
+import { can, canOnResource } from "@/lib/auth/permissions";
 import { swrKeys } from "@/lib/api/swr-keys";
 
 /** Debounce trước khi reload preview — gõ số/text không bị giật lại mỗi phím. */
@@ -111,6 +111,10 @@ export function useVariantEditorPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  const [shareLink, setShareLink] = useState<ApiSharedPreviewLink | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+
   // Seed config từ variant đúng 1 lần mỗi khi ĐỔI variant.
   useEffect(() => {
     if (variant) {
@@ -190,6 +194,35 @@ export function useVariantEditorPage() {
       variant.createdById,
       session?.user.id,
     );
+  const canShare = can(session?.permissions ?? null, "share");
+
+  const handleCreateShareLink = async () => {
+    if (!session) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const link = await api.createVariantShareLink(session.accessToken, variantId);
+      setShareLink(link);
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleRevokeShareLink = async () => {
+    if (!session) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      await api.revokeVariantShareLink(session.accessToken, variantId);
+      setShareLink(null);
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!session) return;
@@ -231,11 +264,18 @@ export function useVariantEditorPage() {
     loadError,
 
     canEdit,
+    canShare,
 
     saving,
     saveError,
     saved,
     handleSave,
+
+    shareLink,
+    sharing,
+    shareError,
+    handleCreateShareLink,
+    handleRevokeShareLink,
 
     // Device preview
     deviceId,

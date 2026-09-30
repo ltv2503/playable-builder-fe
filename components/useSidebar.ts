@@ -5,13 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
 
 export interface SidebarNavItem {
-  id: "preview" | "games" | "all-games" | "admin";
+  id: "games" | "all-games" | "admin";
   label: string;
   href: string;
 }
 
 const NAV_ITEMS: SidebarNavItem[] = [
-  { id: "preview", label: "Preview local", href: "/preview-local" },
   { id: "games", label: "Games", href: "/games" },
   { id: "all-games", label: "All Games", href: "/all-games" },
 ];

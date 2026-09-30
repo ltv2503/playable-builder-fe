@@ -205,6 +205,7 @@ export const api = {
     apiPatch<ApiVariant>(`/variants/${id}`, { config }, authHeader(token)),
   renameVariant: (token: string, id: string, name: string) => apiPatch<ApiVariant>(`/variants/${id}`, { name }, authHeader(token)),
   deleteVariant: (token: string, id: string) => apiDelete<void>(`/variants/${id}`, authHeader(token)),
+  duplicateVariant: (token: string, id: string) => apiPost<ApiVariant>(`/variants/${id}/duplicate`, {}, authHeader(token)),
 
   getMyPermissions: (token: string) => apiGet<{ isAdmin: boolean; keys: string[] }>("/auth/me/permissions", authHeader(token)),
 
@@ -218,7 +219,37 @@ export const api = {
     ),
   updatePermissionsMatrix: (token: string, matrix: Record<string, string[]>) =>
     apiPut<{ ok: boolean }>("/admin/permissions", { matrix }, authHeader(token)),
+
+  /** Tạo (hoặc tái dùng link còn sống) link xem công khai cho bản single-html gốc — xem nút "Share" ở builds/[id]. */
+  createShareLink: (token: string, buildId: string) => apiPost<ApiSharedPreviewLink>(`/builds/${buildId}/share`, {}, authHeader(token)),
+  revokeShareLink: (token: string, buildId: string) => apiDelete<void>(`/builds/${buildId}/share`, authHeader(token)),
+  /** Như trên nhưng cho đúng 1 biến thể (đã vá playgroundConfig) — xem nút "Share" ở variant editor. */
+  createVariantShareLink: (token: string, variantId: string) =>
+    apiPost<ApiSharedPreviewLink>(`/variants/${variantId}/share`, {}, authHeader(token)),
+  revokeVariantShareLink: (token: string, variantId: string) => apiDelete<void>(`/variants/${variantId}/share`, authHeader(token)),
 };
+
+export interface ApiSharedPreviewLink {
+  token: string;
+  expiresAt: string;
+}
+
+export type ResolvedSharedPreview = { buildName: string } & ({ kind: "url"; url: string } | { kind: "html"; html: string });
+
+/**
+ * Route public (không cần token) — gọi từ Server Component app/share/[token]/page.tsx. Bản gốc trả về
+ * `{ kind: "url" }` (presigned URL của storage, chưa vá config nào); bản biến thể trả `{ kind: "html" }`
+ * (nội dung html đã vá playgroundConfig sẵn ở backend, vì không có object đã-vá nào trên storage để
+ * presign) — xem SharedPreviewLinksService.resolve() ở backend.
+ */
+export async function resolveSharedPreviewLink(token: string): Promise<ResolvedSharedPreview> {
+  const res = await fetch(`${API_URL}/share/${encodeURIComponent(token)}`, { cache: "no-store" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message || "Link xem không hợp lệ hoặc đã hết hạn.");
+  }
+  return res.json();
+}
 
 /**
  * Endpoint download yêu cầu JWT (RolesGuard) nhưng redirect (302) sang

@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
-import { Button } from "@/components/common";
+import { Button, Dialog, Input } from "@/components/common";
 import {
   ArrowLeftIcon,
   LayersIcon,
+  ShareIcon,
 } from "@/components/icons";
-import { PageLoading } from "@/components/Spinner";
+import { PageLoading, Spinner } from "@/components/Spinner";
 import { PlaygroundConfigForm } from "@/components/PlaygroundConfigForm";
 import DeviceFrame from "@/components/Preview/DeviceFrame";
 
@@ -25,10 +26,17 @@ export default function VariantEditorPage() {
     previewUrl,
     loadError,
     canEdit,
+    canShare,
     saving,
     saveError,
     saved,
     handleSave,
+
+    shareLink,
+    sharing,
+    shareError,
+    handleCreateShareLink,
+    handleRevokeShareLink,
 
     deviceId,
     setDeviceId,
@@ -39,6 +47,27 @@ export default function VariantEditorPage() {
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
   const [deviceScale, setDeviceScale] = useState(1);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const shareUrl = shareLink && typeof window !== "undefined" ? `${window.location.origin}/share/${shareLink.token}` : null;
+
+  const handleOpenShareDialog = () => {
+    setShareDialogOpen(true);
+    if (!shareLink) handleCreateShareLink();
+  };
+
+  const handleCopyShareUrl = async () => {
+    if (!shareUrl) return;
+    await navigator.clipboard.writeText(shareUrl);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
+
+  const handleRevokeAndClose = async () => {
+    await handleRevokeShareLink();
+    setShareDialogOpen(false);
+  };
 
   // ------------------------------------------------------------
   // Auto scale device để luôn vừa vùng preview
@@ -111,7 +140,7 @@ export default function VariantEditorPage() {
           </div>
         </div>
 
-        {canEdit && (
+        {(canEdit || canShare) && (
           <div className="flex items-center gap-3">
             {saved && (
               <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
@@ -125,14 +154,23 @@ export default function VariantEditorPage() {
               </span>
             )}
 
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={!previewUrl}
-              loading={saving}
-            >
-              {saving ? "Đang lưu..." : "Lưu biến thể"}
-            </Button>
+            {canShare && (
+              <Button type="button" variant="secondary" onClick={handleOpenShareDialog}>
+                <ShareIcon className="h-4 w-4" />
+                Share
+              </Button>
+            )}
+
+            {canEdit && (
+              <Button
+                type="button"
+                onClick={handleSave}
+                disabled={!previewUrl}
+                loading={saving}
+              >
+                {saving ? "Đang lưu..." : "Lưu biến thể"}
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -276,6 +314,35 @@ export default function VariantEditorPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} title="Link xem công khai biến thể">
+        {sharing && !shareLink && (
+          <div className="flex items-center gap-2 text-sm text-zinc-500">
+            <Spinner className="h-4 w-4" />
+            Đang tạo link...
+          </div>
+        )}
+
+        {shareError && <p className="text-sm text-red-600 dark:text-red-400">{shareError}</p>}
+
+        {shareUrl && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-zinc-500">
+              Ai có link này đều xem được (không cần đăng nhập, đã vá đúng config của biến thể "{variant?.name}"), hết hạn ngày{" "}
+              {shareLink?.expiresAt && new Date(shareLink.expiresAt).toLocaleString("vi-VN")}.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={shareUrl} onFocus={(e) => e.target.select()} className="flex-1 font-mono text-xs" />
+              <Button type="button" variant="outline" size="sm" onClick={handleCopyShareUrl}>
+                {linkCopied ? "Đã copy" : "Copy"}
+              </Button>
+            </div>
+            <Button type="button" variant="danger" size="sm" onClick={handleRevokeAndClose} loading={sharing} className="self-start">
+              Thu hồi link
+            </Button>
+          </div>
+        )}
+      </Dialog>
     </main>
   );
 }

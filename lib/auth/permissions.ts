@@ -15,7 +15,8 @@ export type PermKey =
   | "variant:edit_any"
   | "variant:delete_own"
   | "variant:delete_any"
-  | "export";
+  | "export"
+  | "share";
 
 export interface EffectivePermissions {
   isAdmin: boolean;

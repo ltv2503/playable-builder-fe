@@ -4,11 +4,15 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
-import { api, exportBuild, openOrDownloadArtifact, type ApiSharedPreviewLink, type ApiVariant } from "@/lib/api";
+import { api, exportBuild, type ApiReuploadPreview, type ApiVariant } from "@/lib/api";
 import { can, canOnResource } from "@/lib/auth/permissions";
 import { swrKeys } from "@/lib/api/swr-keys";
+import { diffFieldsRegistry, variantsAffectedByRemoval, type FieldsRegistryDiff } from "@/lib/cocos/fieldsRegistryDiff";
 
 const POLL_INTERVAL_MS = 3000;
+
+export type ReuploadPngMode = "off" | "palette" | "webp";
+export type ReuploadStep = "pick" | "previewing" | "diff" | "confirming";
 
 export function useBuildDetailPage() {
   const { id: buildId } = useParams<{ id: string }>();
@@ -38,22 +42,26 @@ export function useBuildDetailPage() {
   const error = firstError ? (firstError instanceof Error ? firstError.message : String(firstError)) : null;
 
   const [selectedNetworks, setSelectedNetworks] = useState<string[]>([]);
-  /** "" = "Mặc định (engine)" — cùng danh sách chọn với các biến thể thật, xem toggleVariant()/handleExport(). */
-  const [selectedVariantIds, setSelectedVariantIds] = useState<string[]>([""]);
+  const [selectedVariantIds, setSelectedVariantIds] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [copyingVariantId, setCopyingVariantId] = useState<string | null>(null);
+  const [copiedVariantId, setCopiedVariantId] = useState<string | null>(null);
+  const [copyLinkError, setCopyLinkError] = useState<string | null>(null);
 
-  const [shareLink, setShareLink] = useState<ApiSharedPreviewLink | null>(null);
-  const [sharing, setSharing] = useState(false);
-  const [shareError, setShareError] = useState<string | null>(null);
+  const [reuploadDialogOpen, setReuploadDialogOpen] = useState(false);
+  const [reuploadStep, setReuploadStep] = useState<ReuploadStep>("pick");
+  const [reuploadFile, setReuploadFile] = useState<File | null>(null);
+  const [reuploadPngMode, setReuploadPngMode] = useState<ReuploadPngMode>("palette");
+  const [reuploadPreview, setReuploadPreview] = useState<ApiReuploadPreview | null>(null);
+  const [reuploadDiff, setReuploadDiff] = useState<FieldsRegistryDiff | null>(null);
+  const [reuploadError, setReuploadError] = useState<string | null>(null);
 
   const perms = session?.permissions ?? null;
   const userId = session?.user.id;
   const canCreateVariant = can(perms, "variant:create");
   const canExport = can(perms, "export");
-  const canShare = can(perms, "share");
   const canEditThisBuild = !!build && canOnResource(perms, "concept", "edit", build.createdById, userId);
   const canDeleteThisBuild = !!build && canOnResource(perms, "concept", "delete", build.createdById, userId);
   const canEditVariant = (variant: ApiVariant) => canOnResource(perms, "variant", "edit", variant.createdById, userId);
@@ -73,51 +81,103 @@ export function useBuildDetailPage() {
     setSelectedVariantIds((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
   };
 
-  /** +1 vì "" (Mặc định engine) luôn là 1 lựa chọn riêng, cạnh các biến thể thật. */
-  const totalVariantOptions = (variants?.length ?? 0) + 1;
-  const allVariantsSelected = selectedVariantIds.length === totalVariantOptions;
+  const totalVariantOptions = variants?.length ?? 0;
+  const allVariantsSelected = totalVariantOptions > 0 && selectedVariantIds.length === totalVariantOptions;
 
   const toggleAllVariants = () => {
-    setSelectedVariantIds((prev) => (prev.length === totalVariantOptions ? [] : ["", ...(variants ?? []).map((v) => v.id)]));
+    setSelectedVariantIds((prev) => (prev.length === totalVariantOptions ? [] : (variants ?? []).map((v) => v.id)));
   };
 
-  const handleDownloadSingle = async () => {
-    if (!session || !build) return;
-    setDownloadError(null);
-    try {
-      const single = build.artifacts.find((a) => a.channelName === "single");
-      if (single) await openOrDownloadArtifact(session.accessToken, single);
-    } catch (e) {
-      setDownloadError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const handleCreateShareLink = async () => {
+  /**
+   * Mỗi biến thể tự có share link không hết hạn ngay từ lúc tạo (VariantsService.create) nên bình
+   * thường chỉ cần copy `variant.shareToken` sẵn có — chỉ gọi API tạo lại khi null (bị thu hồi thủ công
+   * ở variant editor trước đó).
+   */
+  const handleCopyVariantShareLink = async (variant: ApiVariant) => {
     if (!session) return;
-    setSharing(true);
-    setShareError(null);
+    setCopyLinkError(null);
+    let token = variant.shareToken;
+    if (!token) {
+      setCopyingVariantId(variant.id);
+      try {
+        const link = await api.createVariantShareLink(session.accessToken, variant.id);
+        token = link.token;
+        mutateVariants((prev) => prev?.map((v) => (v.id === variant.id ? { ...v, shareToken: token } : v)), { revalidate: false });
+      } catch (e) {
+        setCopyLinkError(e instanceof Error ? e.message : String(e));
+        setCopyingVariantId(null);
+        return;
+      }
+      setCopyingVariantId(null);
+    }
+    await navigator.clipboard.writeText(`${window.location.origin}/share/${token}`);
+    setCopiedVariantId(variant.id);
+    setTimeout(() => setCopiedVariantId((id) => (id === variant.id ? null : id)), 2000);
+  };
+
+  const resetReuploadState = () => {
+    setReuploadStep("pick");
+    setReuploadFile(null);
+    setReuploadPreview(null);
+    setReuploadDiff(null);
+    setReuploadError(null);
+  };
+
+  const openReuploadDialog = () => {
+    resetReuploadState();
+    setReuploadDialogOpen(true);
+  };
+
+  /** Bước 1/2: upload zip mới, backend chỉ quét fieldsRegistry (không build/đè gì) rồi trả về để diff với bản hiện tại. */
+  const handlePreviewReupload = async () => {
+    if (!session || !reuploadFile || !build) return;
+    setReuploadStep("previewing");
+    setReuploadError(null);
     try {
-      const link = await api.createShareLink(session.accessToken, buildId);
-      setShareLink(link);
+      const preview = await api.previewReupload(session.accessToken, buildId, reuploadFile, { pngMode: reuploadPngMode });
+      setReuploadPreview(preview);
+      setReuploadDiff(diffFieldsRegistry(build.fieldsRegistry, preview.fieldsRegistry));
+      setReuploadStep("diff");
     } catch (e) {
-      setShareError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSharing(false);
+      setReuploadError(e instanceof Error ? e.message : String(e));
+      setReuploadStep("pick");
     }
   };
 
-  const handleRevokeShareLink = async () => {
-    if (!session) return;
-    setSharing(true);
-    setShareError(null);
+  /** Bước 2/2: user đã xem diff, bấm xác nhận đè. Build chuyển PENDING — polling sẵn có (refreshInterval ở trên) tự lo phần còn lại. */
+  const handleConfirmReupload = async () => {
+    if (!session || !reuploadPreview) return;
+    setReuploadStep("confirming");
+    setReuploadError(null);
     try {
-      await api.revokeShareLink(session.accessToken, buildId);
-      setShareLink(null);
+      const updated = await api.confirmReupload(session.accessToken, buildId, reuploadPreview.pendingUploadId);
+      mutateBuild(updated, { revalidate: false });
+      setReuploadDialogOpen(false);
+      resetReuploadState();
     } catch (e) {
-      setShareError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSharing(false);
+      setReuploadError(e instanceof Error ? e.message : String(e));
+      setReuploadStep("diff");
     }
+  };
+
+  /** Huỷ ở bước diff (hoặc đóng dialog giữa chừng) — dọn pending upload trên server, build gốc không đổi gì. */
+  const handleCancelReupload = async () => {
+    if (!session) return;
+    const pendingUploadId = reuploadPreview?.pendingUploadId;
+    setReuploadDialogOpen(false);
+    resetReuploadState();
+    if (!pendingUploadId) return;
+    try {
+      await api.cancelReupload(session.accessToken, buildId, pendingUploadId);
+    } catch {
+      // best-effort — server tự dọn pending rác này khi user upload lại lần sau hoặc lúc xoá concept
+    }
+  };
+
+  /** onOpenChange của Dialog — bấm X/Escape/click ra ngoài cũng phải dọn pending y hệt bấm nút Huỷ. */
+  const handleReuploadDialogOpenChange = (open: boolean) => {
+    if (open) setReuploadDialogOpen(true);
+    else void handleCancelReupload();
   };
 
   /** Mỗi biến thể đã chọn export riêng 1 file/zip (tải tuần tự, không dồn hết vào 1 file) — chọn "Mặc định (engine)" ("") thì export thêm 1 bản không vá config nào. */
@@ -174,7 +234,6 @@ export function useBuildDetailPage() {
     error,
     canCreateVariant,
     canExport,
-    canShare,
     canEditThisBuild,
     canDeleteThisBuild,
     canEditVariant,
@@ -188,13 +247,10 @@ export function useBuildDetailPage() {
     toggleVariant,
     allVariantsSelected,
     toggleAllVariants,
-    downloadError,
-    handleDownloadSingle,
-    shareLink,
-    sharing,
-    shareError,
-    handleCreateShareLink,
-    handleRevokeShareLink,
+    copyingVariantId,
+    copiedVariantId,
+    copyLinkError,
+    handleCopyVariantShareLink,
     exporting,
     exportError,
     handleExport,
@@ -203,5 +259,19 @@ export function useBuildDetailPage() {
     duplicateVariant,
     deleteBuild,
     renameBuild,
+    reuploadDialogOpen,
+    reuploadStep,
+    reuploadFile,
+    setReuploadFile,
+    reuploadPngMode,
+    setReuploadPngMode,
+    reuploadDiff,
+    reuploadAffectedVariants: reuploadDiff ? variantsAffectedByRemoval(reuploadDiff.removed, variants ?? []) : [],
+    reuploadError,
+    openReuploadDialog,
+    handleReuploadDialogOpenChange,
+    handlePreviewReupload,
+    handleConfirmReupload,
+    handleCancelReupload,
   };
 }

@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
-import { api, fetchArtifactBlob, type ApiSharedPreviewLink, type PlaygroundConfig } from "@/lib/api";
+import {
+  api,
+  fetchArtifactBlob,
+  type ApiSharedPreviewLink,
+  type PlaygroundConfig,
+} from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import {
   injectPlaygroundConfig,
@@ -39,7 +44,7 @@ export const PREVIEW_DEVICES: PreviewDevice[] = [
     width: 375,
     height: 667,
     type: "phone",
-    radius: 0,
+    radius: 20,
   },
   {
     id: "ipad",
@@ -201,7 +206,10 @@ export function useVariantEditorPage() {
     setSharing(true);
     setShareError(null);
     try {
-      const link = await api.createVariantShareLink(session.accessToken, variantId);
+      const link = await api.createVariantShareLink(
+        session.accessToken,
+        variantId,
+      );
       setShareLink(link);
     } catch (e) {
       setShareError(e instanceof Error ? e.message : String(e));

@@ -2,7 +2,8 @@ import React from "react";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "outline" | "danger" | "ghost";
-  size?: "sm" | "md" | "lg";
+  /** "icon": nút vuông chỉ chứa icon (vd hành động sửa/xoá/nhân bản trong bảng) — không có text, padding đều 4 cạnh. */
+  size?: "sm" | "md" | "lg" | "icon";
   loading?: boolean;
 }
 
@@ -25,6 +26,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       sm: "px-3 py-1.5 text-sm",
       md: "px-4 py-2 text-sm",
       lg: "px-6 py-3 text-base",
+      icon: "p-1.5",
     };
 
     return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card } from "@/components/common";
+import { Button, Card, Checkbox } from "@/components/common";
 import { PageLoading } from "@/components/Spinner";
 import type { Role } from "@/lib/api";
 import { useAdminPage } from "./useAdminPage";
@@ -133,11 +133,9 @@ export default function AdminPage() {
                           <span className="text-zinc-700 dark:text-zinc-300">{def.label}</span>
                           {editableRoles.map((role) => (
                             <span key={role} className="flex justify-center">
-                              <input
-                                type="checkbox"
+                              <Checkbox
                                 checked={(matrix[role] ?? []).includes(def.key)}
                                 onChange={() => togglePermission(role, def.key)}
-                                className="h-4 w-4 accent-primary"
                               />
                             </span>
                           ))}

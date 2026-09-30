@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { Button, Dialog, Input } from "@/components/common";
 import {
   ArrowLeftIcon,
   LayersIcon,
+  RotateDeviceIcon,
   ShareIcon,
 } from "@/components/icons";
 import { PageLoading, Spinner } from "@/components/Spinner";
@@ -47,8 +48,45 @@ export default function VariantEditorPage() {
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
   const [deviceScale, setDeviceScale] = useState(1);
+  const [rotated, setRotated] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  /**
+   * Xoay màn = đổi thật kích thước canvas (hoán vị width/height), không phải chỉ transform: rotate()
+   * phần khung hiển thị — vì content bên trong (game Cocos) cần đọc đúng kích thước mới lúc khởi động
+   * để tự dàn lại layout theo hướng ngang, không phải thấy y hệt bản dọc nhưng bị vặn nghiêng đi.
+   * iframe key bên dưới include `rotated` để ép remount (load lại) mỗi khi đổi hướng.
+   */
+  const previewDevice = rotated
+    ? { ...selectedDevice, width: selectedDevice.height, height: selectedDevice.width }
+    : selectedDevice;
+
+  // ------------------------------------------------------------
+  // Anim xoay (FLIP kỹ thuật cũ điển): rotateWrapperRef đã LUÔN render đúng kích thước mới (previewDevice)
+  // ngay khi rotated đổi — không đợi animation nào. Effect này chỉ lo phần NHÌN như đang xoay: snap tức
+  // thời (không transition) về góc xoay khiến box-mới-kích-thước trông y hệt box-cũ-kích-thước, rồi bật
+  // lại transition và trả góc xoay về 0 — tạo cảm giác xoay mượt trong lúc bản chất kích thước đã đổi
+  // xong từ đầu (để content bên trong load đúng kích thước canvas ngay, không đợi hết animation).
+  // ------------------------------------------------------------
+
+  const rotateWrapperRef = useRef<HTMLDivElement>(null);
+  const prevRotatedRef = useRef(rotated);
+
+  useLayoutEffect(() => {
+    const wasRotated = prevRotatedRef.current;
+    prevRotatedRef.current = rotated;
+
+    const el = rotateWrapperRef.current;
+    if (!el || wasRotated === rotated) return;
+
+    const preSpinDeg = rotated ? 90 : -90;
+    el.style.transition = "none";
+    el.style.transform = `rotate(${preSpinDeg}deg)`;
+    void el.offsetHeight; // ép reflow để trình duyệt chốt state trên trước khi bật lại transition
+    el.style.transition = "transform 350ms ease";
+    el.style.transform = "rotate(0deg)";
+  }, [rotated]);
 
   const shareUrl = shareLink && typeof window !== "undefined" ? `${window.location.origin}/share/${shareLink.token}` : null;
 
@@ -87,11 +125,8 @@ export default function VariantEditorPage() {
       const availableWidth = rect.width - padding;
       const availableHeight = rect.height - padding;
 
-      const deviceWidth = selectedDevice.width;
-      const deviceHeight = selectedDevice.height;
-
-      const scaleX = availableWidth / deviceWidth;
-      const scaleY = availableHeight / deviceHeight;
+      const scaleX = availableWidth / previewDevice.width;
+      const scaleY = availableHeight / previewDevice.height;
 
       // Không scale lớn hơn 1 để preview không bị phóng to quá mức.
       const scale = Math.min(scaleX, scaleY, 1);
@@ -106,8 +141,12 @@ export default function VariantEditorPage() {
 
     return () => observer.disconnect();
   }, [
-    selectedDevice.width,
-    selectedDevice.height,
+    previewDevice.width,
+    previewDevice.height,
+    // previewContainerRef chỉ thật sự mount vào DOM khi previewUrl có giá trị ({previewUrl && (...)}) —
+    // ref đổi từ null sang element KHÔNG tự kích hoạt effect chạy lại, nên phải thêm previewUrl vào đây,
+    // nếu không lần đầu load trang effect bail ở `!element` và deviceScale kẹt ở 100% cho tới khi đổi device.
+    previewUrl,
   ]);
 
   if (!session) {
@@ -238,9 +277,22 @@ export default function VariantEditorPage() {
               {/* Resolution */}
 
               <span className="text-[11px] text-zinc-400">
-                {selectedDevice.width} ×{" "}
-                {selectedDevice.height}
+                {rotated ? selectedDevice.height : selectedDevice.width} ×{" "}
+                {rotated ? selectedDevice.width : selectedDevice.height}
               </span>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setRotated((prev) => !prev)}
+                title={rotated ? "Xoay lại màn dọc" : "Xoay ngang màn"}
+                className={`hover:bg-zinc-100! dark:hover:bg-zinc-800! ${
+                  rotated ? "text-primary!" : "text-zinc-400! hover:text-zinc-700! dark:hover:text-zinc-200!"
+                }`}
+              >
+                <RotateDeviceIcon className="h-4 w-4" />
+              </Button>
 
               <div className="flex-1" />
 
@@ -257,36 +309,47 @@ export default function VariantEditorPage() {
               ref={previewContainerRef}
               className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
             >
-              {/* 
-                Scale bằng transform.
-                
-                Quan trọng:
-                iframe vẫn có width/height thật của device.
-                Chỉ phần hiển thị bên ngoài được scale.
+              {/*
+                previewDevice đã hoán vị width/height khi rotated — canvas/iframe được cấp đúng kích
+                thước màn ngang thật ngay lập tức (không đợi animation). 2 lớp transform tách riêng:
+                lớp ngoài scale-to-fit (%zoom, React re-render mượt theo deviceScale bình thường), lớp
+                trong rotate do rotateWrapperRef's useLayoutEffect điều khiển (xem effect phía trên) —
+                tách riêng để đổi % zoom không vô tình kích hoạt lại animation xoay và ngược lại.
               */}
 
               <div
                 style={{
-                  width: selectedDevice.width,
-                  height: selectedDevice.height,
                   transform: `scale(${deviceScale})`,
                   transformOrigin: "center center",
+                  transition: "transform 300ms ease",
                 }}
               >
-                <DeviceFrame device={selectedDevice}>
-                  <iframe
-                    key={`${previewUrl}-${selectedDevice.id}`}
-                    src={previewUrl}
-                    title="Variant preview"
-                    sandbox="allow-scripts allow-same-origin"
-                    style={{
-                      display: "block",
-                      width: selectedDevice.width,
-                      height: selectedDevice.height,
-                      border: "none",
-                    }}
-                  />
-                </DeviceFrame>
+                <div
+                  ref={rotateWrapperRef}
+                  style={{
+                    width: previewDevice.width,
+                    height: previewDevice.height,
+                    transform: "rotate(0deg)",
+                    transformOrigin: "center center",
+                  }}
+                >
+                  <DeviceFrame device={previewDevice}>
+                    <iframe
+                      // rotated trong key -> ép remount lúc đổi hướng, để content bên trong (Cocos) load
+                      // lại từ đầu và tự đọc đúng kích thước canvas mới, không phải thấy y hệt bản cũ.
+                      key={`${previewUrl}-${selectedDevice.id}-${rotated}`}
+                      src={previewUrl}
+                      title="Variant preview"
+                      sandbox="allow-scripts allow-same-origin"
+                      style={{
+                        display: "block",
+                        width: previewDevice.width,
+                        height: previewDevice.height,
+                        border: "none",
+                      }}
+                    />
+                  </DeviceFrame>
+                </div>
               </div>
             </div>
           </div>
@@ -328,8 +391,10 @@ export default function VariantEditorPage() {
         {shareUrl && (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-zinc-500">
-              Ai có link này đều xem được (không cần đăng nhập, đã vá đúng config của biến thể "{variant?.name}"), hết hạn ngày{" "}
-              {shareLink?.expiresAt && new Date(shareLink.expiresAt).toLocaleString("vi-VN")}.
+              Ai có link này đều xem được (không cần đăng nhập, đã vá đúng config của biến thể "{variant?.name}"),{" "}
+              {shareLink?.expiresAt
+                ? `hết hạn ngày ${new Date(shareLink.expiresAt).toLocaleString("vi-VN")}.`
+                : "không hết hạn."}
             </p>
             <div className="flex items-center gap-2">
               <Input readOnly value={shareUrl} onFocus={(e) => e.target.select()} className="flex-1 font-mono text-xs" />

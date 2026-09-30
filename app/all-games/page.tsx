@@ -1,7 +1,7 @@
 "use client";
 
 import * as RadixDialog from "@radix-ui/react-dialog";
-import { Button, Card, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/common";
+import { Button, Card, Checkbox, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/common";
 import { PageLoading, Spinner } from "@/components/Spinner";
 import { EmptyState } from "@/components/EmptyState";
 import { AndroidIcon, AppleIcon, DriveIcon, EditIcon, GamesIcon, GithubIcon, PlusIcon, TrashIcon } from "@/components/icons";
@@ -150,22 +150,26 @@ export default function AllGamesPage() {
                     {isAdmin && (
                       <TableCell align="right">
                         <div className="flex justify-end gap-1">
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon"
                             title="Sửa"
                             onClick={() => openEdit(entry)}
-                            className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-primary dark:hover:bg-zinc-800"
+                            className="text-zinc-400! hover:bg-zinc-100! hover:text-primary! dark:hover:bg-zinc-800!"
                           >
                             <EditIcon className="h-4 w-4" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon"
                             title="Xoá"
                             onClick={() => handleDelete(entry)}
-                            className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                            className="text-zinc-400! hover:bg-red-50! hover:text-red-600! dark:hover:bg-red-950/40!"
                           >
                             <TrashIcon className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </div>
                       </TableCell>
                     )}
@@ -268,11 +272,10 @@ export default function AllGamesPage() {
               </div>
 
               <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={form.inhouse ?? true}
                   onChange={(e) => setField("inhouse", e.target.checked)}
-                  className="h-3.5 w-3.5 accent-primary"
+                  className="h-3.5! w-3.5!"
                 />
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">Inhouse</span>
               </label>

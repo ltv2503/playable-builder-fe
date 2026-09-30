@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Button, Card, Input } from "@/components/common";
+import { Button, Card, Checkbox, Input } from "@/components/common";
 import { ArrowLeftIcon, UploadCloudIcon } from "@/components/icons";
 import { PageLoading } from "@/components/Spinner";
 import { useNewConceptPage, type PngMode } from "./useNewConceptPage";
@@ -131,12 +131,7 @@ export default function NewConceptPage() {
                     }`}
                   >
                     <div className="flex w-full items-center justify-between">
-                      <input
-                        type="checkbox"
-                        checked={img.compress}
-                        onChange={() => togglePngCompress(img.path)}
-                        className="h-3.5 w-3.5 accent-primary"
-                      />
+                      <Checkbox checked={img.compress} onChange={() => togglePngCompress(img.path)} className="h-3.5! w-3.5!" />
                       <span className="text-[10px] text-zinc-400">{formatKb(img.size)}</span>
                     </div>
                     <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded bg-[repeating-conic-gradient(#8883_0%_25%,transparent_0%_50%)] bg-[length:10px_10px]">

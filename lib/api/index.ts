@@ -137,14 +137,23 @@ export interface ApiBuild {
   artifacts: ApiBuildArtifact[];
 }
 
+/** Trả về từ POST /builds/:id/reupload/preview — fieldsRegistry của zip mới, chưa build/đè gì cả. */
+export interface ApiReuploadPreview {
+  pendingUploadId: string;
+  fieldsRegistry: PlaygroundFieldsRegistry;
+}
+
 export interface ApiVariant {
   id: string;
   buildId: string;
   name: string;
   config: PlaygroundConfig;
   createdById: string;
+  createdBy: { name: string; email: string };
   createdAt: string;
   updatedAt: string;
+  /** Token của share link còn sống (chưa revoke) của biến thể này — null nếu chưa có/đã bị thu hồi. */
+  shareToken: string | null;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
@@ -194,6 +203,25 @@ export const api = {
     if (options?.noCompressPaths?.length) form.append("noCompressPaths", JSON.stringify(options.noCompressPaths));
     return apiPost<ApiBuild>(`/games/${gameId}/builds`, form, authHeader(token));
   },
+  /** Bước 1/2 "Upload lại" (đè lên concept có sẵn) — quét fieldsRegistry của zip mới, KHÔNG build/đè gì cả. */
+  previewReupload: (
+    token: string,
+    buildId: string,
+    file: File,
+    options?: { pngMode?: "off" | "palette" | "webp"; noCompressPaths?: string[] },
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (options?.pngMode) form.append("pngMode", options.pngMode);
+    if (options?.noCompressPaths?.length) form.append("noCompressPaths", JSON.stringify(options.noCompressPaths));
+    return apiPost<ApiReuploadPreview>(`/builds/${buildId}/reupload/preview`, form, authHeader(token));
+  },
+  /** Bước 2/2 — user đã xem diff config và xác nhận đè. */
+  confirmReupload: (token: string, buildId: string, pendingUploadId: string) =>
+    apiPost<ApiBuild>(`/builds/${buildId}/reupload/${pendingUploadId}/confirm`, {}, authHeader(token)),
+  /** User huỷ sau khi xem diff (hoặc đóng popup) — dọn pending upload, build gốc không đổi gì. */
+  cancelReupload: (token: string, buildId: string, pendingUploadId: string) =>
+    apiDelete<void>(`/builds/${buildId}/reupload/${pendingUploadId}`, authHeader(token)),
 
   listNetworks: (token: string) => apiGet<string[]>("/meta/networks", authHeader(token)),
 
@@ -231,7 +259,8 @@ export const api = {
 
 export interface ApiSharedPreviewLink {
   token: string;
-  expiresAt: string;
+  /** null = không hết hạn (mọi link tạo mới đều vậy). */
+  expiresAt: string | null;
 }
 
 export type ResolvedSharedPreview = { buildName: string } & ({ kind: "url"; url: string } | { kind: "html"; html: string });

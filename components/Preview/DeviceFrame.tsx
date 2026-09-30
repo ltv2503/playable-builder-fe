@@ -1,6 +1,4 @@
-
-
-import React from 'react'
+import React from "react";
 interface DeviceFrameProps {
   device: {
     width: number;
@@ -10,11 +8,8 @@ interface DeviceFrameProps {
   };
   children: React.ReactNode;
 }
-const DeviceFrame = ({
-  device,
-  children,
-} : DeviceFrameProps) => {
-   return (
+const DeviceFrame = ({ device, children }: DeviceFrameProps) => {
+  return (
     <div
       className="relative shrink-0 bg-white p-[14px] shadow-xl"
       style={{
@@ -32,8 +27,8 @@ const DeviceFrame = ({
       >
         {children}
 
-        {/* iPhone notch */}
-        {device.type === "phone" && (
+        {/* iPhone notch — chỉ hợp lý ở chiều dọc; vị trí này không tính lại được cho chiều ngang nên ẩn đi khi xoay màn. */}
+        {device.type === "phone" && device.width < device.height && (
           <div
             className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 bg-black"
             style={{
@@ -47,12 +42,11 @@ const DeviceFrame = ({
 
         {/* iPhone home indicator */}
         {device.type === "phone" && device.height === 812 && (
-          <div
-            className="pointer-events-none absolute bottom-2 left-1/2 h-[5px] w-[70px] -translate-x-1/2 rounded-full bg-white"
-          />
+          <div className="pointer-events-none absolute bottom-2 left-1/2 h-[5px] w-[70px] -translate-x-1/2 rounded-full bg-white" />
         )}
       </div>
-    </div>);
-}
+    </div>
+  );
+};
 
-export default DeviceFrame
+export default DeviceFrame;

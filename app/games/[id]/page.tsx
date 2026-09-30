@@ -6,7 +6,7 @@ import type { ApiBuild } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EmptyState } from "@/components/EmptyState";
 import { PageLoading, Spinner } from "@/components/Spinner";
-import { PromptDialog } from "@/components/common";
+import { Button, PromptDialog } from "@/components/common";
 import { ArrowLeftIcon, ChevronRightIcon, EditIcon, ExternalLinkIcon, LayersIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { GameIcon } from "@/components/GameIcon";
 import { useGameDetailPage } from "./useGameDetailPage";
@@ -56,25 +56,29 @@ function ConceptRow({
       <span className="pointer-events-none text-xs text-zinc-500">{new Date(build.updatedAt).toLocaleString("vi-VN")}</span>
       <ChevronRightIcon className="pointer-events-none h-4 w-4 text-zinc-300 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-400" />
       {canEdit && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={handleRenameClick}
-          className="relative z-10 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          className="relative z-10 text-zinc-400! hover:bg-zinc-100! hover:text-zinc-700! dark:hover:bg-zinc-800! dark:hover:text-zinc-200!"
           title="Đổi tên concept"
         >
           <EditIcon className="h-4 w-4" />
-        </button>
+        </Button>
       )}
       {canDelete && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={handleDelete}
           disabled={deleting}
-          className="relative z-10 rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+          className="relative z-10 text-zinc-400! hover:bg-red-50! hover:text-red-600! dark:hover:bg-red-950/40! dark:hover:text-red-400!"
           title="Xoá concept"
         >
           {deleting ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
-        </button>
+        </Button>
       )}
     </div>
   );

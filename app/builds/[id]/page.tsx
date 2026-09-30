@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button, Card, Checkbox, Dialog, Input, PromptDialog } from "@/components/common";
+import { Button, Card, Checkbox, Dialog, PromptDialog, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/common";
 import { EmptyState } from "@/components/EmptyState";
 import { PageLoading, Spinner } from "@/components/Spinner";
 import {
@@ -13,12 +13,42 @@ import {
   EditIcon,
   LayersIcon,
   PlusIcon,
-  PreviewIcon,
   RocketIcon,
-  ShareIcon,
   TrashIcon,
+  UploadCloudIcon,
 } from "@/components/icons";
-import { useBuildDetailPage } from "./useBuildDetailPage";
+import type { FieldDiffChange, FieldDiffEntry } from "@/lib/cocos/fieldsRegistryDiff";
+import { useBuildDetailPage, type ReuploadPngMode } from "./useBuildDetailPage";
+
+const REUPLOAD_PNG_MODES: { value: ReuploadPngMode; label: string }[] = [
+  { value: "off", label: "Tắt — giữ nguyên ảnh gốc" },
+  { value: "palette", label: "Palette PNG — nén vừa, giữ định dạng PNG" },
+  { value: "webp", label: "WebP — nén mạnh nhất, đổi định dạng ảnh" },
+];
+
+const DIFF_STATUS_PILL: Record<"added" | "removed" | "changed", string> = {
+  added:
+    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+  removed: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+  changed: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+};
+
+const DIFF_STATUS_LABEL: Record<"added" | "removed" | "changed", string> = { added: "Mới", removed: "Bị xoá", changed: "Đổi kiểu" };
+
+function fieldDetail(entry: FieldDiffEntry): string {
+  const { match } = entry;
+  return match.kind === "asset" ? `asset${match.assetKind ? `: ${match.assetKind}` : ""}` : match.fieldType?.type ?? "?";
+}
+
+function changeDetail(change: FieldDiffChange): string {
+  const beforeType = change.before.fieldType?.type ?? change.before.kind;
+  const afterType = change.after.fieldType?.type ?? change.after.kind;
+  if (beforeType !== afterType) return `${beforeType} → ${afterType}`;
+  const beforeSection = change.before.options.section ?? "—";
+  const afterSection = change.after.options.section ?? "—";
+  if (beforeSection !== afterSection) return `Section: "${beforeSection}" → "${afterSection}"`;
+  return "Cấu hình thay đổi";
+}
 
 type RenameTarget = { kind: "build" } | { kind: "variant"; id: string; name: string };
 
@@ -31,7 +61,6 @@ export default function BuildDetailPage() {
     error,
     canCreateVariant,
     canExport,
-    canShare,
     canEditThisBuild,
     canDeleteThisBuild,
     canEditVariant,
@@ -45,13 +74,10 @@ export default function BuildDetailPage() {
     toggleVariant,
     allVariantsSelected,
     toggleAllVariants,
-    downloadError,
-    handleDownloadSingle,
-    shareLink,
-    sharing,
-    shareError,
-    handleCreateShareLink,
-    handleRevokeShareLink,
+    copyingVariantId,
+    copiedVariantId,
+    copyLinkError,
+    handleCopyVariantShareLink,
     exporting,
     exportError,
     handleExport,
@@ -60,33 +86,26 @@ export default function BuildDetailPage() {
     duplicateVariant,
     deleteBuild,
     renameBuild,
+    reuploadDialogOpen,
+    reuploadStep,
+    reuploadFile,
+    setReuploadFile,
+    reuploadPngMode,
+    setReuploadPngMode,
+    reuploadDiff,
+    reuploadAffectedVariants,
+    reuploadError,
+    openReuploadDialog,
+    handleReuploadDialogOpenChange,
+    handlePreviewReupload,
+    handleConfirmReupload,
+    handleCancelReupload,
   } = useBuildDetailPage();
 
   const [deletingBuild, setDeletingBuild] = useState(false);
   const [deletingVariantId, setDeletingVariantId] = useState<string | null>(null);
   const [duplicatingVariantId, setDuplicatingVariantId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
-
-  const shareUrl = shareLink && typeof window !== "undefined" ? `${window.location.origin}/share/${shareLink.token}` : null;
-
-  const handleOpenShareDialog = () => {
-    setShareDialogOpen(true);
-    if (!shareLink) handleCreateShareLink();
-  };
-
-  const handleCopyShareUrl = async () => {
-    if (!shareUrl) return;
-    await navigator.clipboard.writeText(shareUrl);
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2000);
-  };
-
-  const handleRevokeAndClose = async () => {
-    await handleRevokeShareLink();
-    setShareDialogOpen(false);
-  };
 
   const handleDeleteBuild = async () => {
     if (!build || !confirm(`Xoá concept "${build.name}"? Mọi biến thể và bản build của nó cũng sẽ bị xoá.`)) return;
@@ -99,9 +118,7 @@ export default function BuildDetailPage() {
     }
   };
 
-  const handleDeleteVariant = async (e: React.MouseEvent, variantId: string, name: string) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDeleteVariant = async (variantId: string, name: string) => {
     if (!confirm(`Xoá biến thể "${name}"?`)) return;
     setDeletingVariantId(variantId);
     try {
@@ -113,9 +130,7 @@ export default function BuildDetailPage() {
     }
   };
 
-  const handleDuplicateVariant = async (e: React.MouseEvent, variantId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDuplicateVariant = async (variantId: string) => {
     setDuplicatingVariantId(variantId);
     try {
       await duplicateVariant(variantId);
@@ -156,26 +171,36 @@ export default function BuildDetailPage() {
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{build.name}</h1>
             <StatusBadge status={build.status} />
             {canEditThisBuild && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => setRenameTarget({ kind: "build" })}
-                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                className="text-zinc-400! hover:bg-zinc-100! hover:text-zinc-700! dark:hover:bg-zinc-800! dark:hover:text-zinc-200!"
                 title="Đổi tên concept"
               >
                 <EditIcon className="h-4 w-4" />
-              </button>
+              </Button>
             )}
           </div>
           <p className="mt-1 text-xs text-zinc-500">
             {build.engineVersion} · Cập nhật {new Date(build.updatedAt).toLocaleString("vi-VN")}
           </p>
         </div>
-        {canDeleteThisBuild && (
-          <Button variant="danger" size="sm" onClick={handleDeleteBuild} loading={deletingBuild}>
-            <TrashIcon className="h-4 w-4" />
-            Xoá concept
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEditThisBuild && (
+            <Button variant="secondary" size="sm" onClick={openReuploadDialog}>
+              <UploadCloudIcon className="h-4 w-4" />
+              Upload lại
+            </Button>
+          )}
+          {canDeleteThisBuild && (
+            <Button variant="danger" size="sm" onClick={handleDeleteBuild} loading={deletingBuild}>
+              <TrashIcon className="h-4 w-4" />
+              Xoá concept
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -191,32 +216,6 @@ export default function BuildDetailPage() {
             <p className="text-sm text-red-800 dark:text-red-200">{build.errorMessage}</p>
           </Card>
         )}
-
-        {build.status === "SUCCESS" && (
-          <Card className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                <PreviewIcon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Bản single.html</p>
-                <p className="text-xs text-zinc-500">Xem thử nhanh, chưa vá config nào</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {canShare && (
-                <Button variant="secondary" size="sm" onClick={handleOpenShareDialog}>
-                  <ShareIcon className="h-4 w-4" />
-                  Share
-                </Button>
-              )}
-              <Button variant="secondary" size="sm" onClick={handleDownloadSingle}>
-                Xem
-              </Button>
-            </div>
-          </Card>
-        )}
-        {downloadError && <p className="text-xs text-red-600 dark:text-red-400">{downloadError}</p>}
 
         {build.status === "SUCCESS" && networks.length > 0 && canExport && (
           <Card className="flex flex-col gap-4">
@@ -234,7 +233,7 @@ export default function BuildDetailPage() {
                 </label>
               </div>
               <div className="flex flex-wrap gap-2">
-                {[{ id: "", name: "Mặc định (engine)" }, ...(variants ?? [])].map((v) => (
+                {(variants ?? []).map((v) => (
                   <label
                     key={v.id}
                     className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -317,57 +316,96 @@ export default function BuildDetailPage() {
           )}
 
           {variants && variants.length > 0 && (
-            <div className="flex flex-col divide-y divide-zinc-100 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm shadow-zinc-900/5 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
-              {variants.map((variant) => (
-                <div
-                  key={variant.id}
-                  className="group relative flex items-center justify-between px-4 py-3.5 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
-                >
-                  <Link href={`/builds/${buildId}/variants/${variant.id}`} className="absolute inset-0" aria-label={variant.name} />
-                  <span className="pointer-events-none font-medium text-zinc-900 dark:text-zinc-50">{variant.name}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="pointer-events-none text-xs text-zinc-500">{new Date(variant.updatedAt).toLocaleString("vi-VN")}</span>
-                    <ChevronRightIcon className="pointer-events-none h-4 w-4 text-zinc-300 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-400" />
-                    {canCreateVariant && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleDuplicateVariant(e, variant.id)}
-                        disabled={duplicatingVariantId === variant.id}
-                        className="relative z-10 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                        title="Nhân bản biến thể"
-                      >
-                        {duplicatingVariantId === variant.id ? <Spinner className="h-4 w-4" /> : <DuplicateIcon className="h-4 w-4" />}
-                      </button>
-                    )}
-                    {canEditVariant(variant) && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setRenameTarget({ kind: "variant", id: variant.id, name: variant.name });
-                        }}
-                        className="relative z-10 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                        title="Đổi tên biến thể"
-                      >
-                        <EditIcon className="h-4 w-4" />
-                      </button>
-                    )}
-                    {canDeleteVariant(variant) && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteVariant(e, variant.id, variant.name)}
-                        disabled={deletingVariantId === variant.id}
-                        className="relative z-10 rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-                        title="Xoá biến thể"
-                      >
-                        {deletingVariantId === variant.id ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Card padding="sm" className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tên</TableHead>
+                    <TableHead>Người tạo</TableHead>
+                    <TableHead>Cập nhật</TableHead>
+                    <TableHead>Share</TableHead>
+                    <TableHead align="right" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {variants.map((variant) => (
+                    <TableRow key={variant.id}>
+                      <TableCell>
+                        <Link
+                          href={`/builds/${buildId}/variants/${variant.id}`}
+                          className="font-medium text-zinc-900 hover:text-primary dark:text-zinc-50"
+                        >
+                          {variant.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-xs text-zinc-500">{variant.createdBy.name || variant.createdBy.email}</TableCell>
+                      <TableCell className="text-xs text-zinc-500">{new Date(variant.updatedAt).toLocaleString("vi-VN")}</TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCopyVariantShareLink(variant)}
+                          loading={copyingVariantId === variant.id}
+                        >
+                          {copiedVariantId === variant.id ? "Đã copy" : "Copy link"}
+                        </Button>
+                      </TableCell>
+                      <TableCell align="right">
+                        <div className="flex justify-end gap-1">
+                          {canCreateVariant && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDuplicateVariant(variant.id)}
+                              disabled={duplicatingVariantId === variant.id}
+                              className="text-zinc-400! hover:bg-zinc-100! hover:text-zinc-700! dark:hover:bg-zinc-800! dark:hover:text-zinc-200!"
+                              title="Nhân bản biến thể"
+                            >
+                              {duplicatingVariantId === variant.id ? <Spinner className="h-4 w-4" /> : <DuplicateIcon className="h-4 w-4" />}
+                            </Button>
+                          )}
+                          {canEditVariant(variant) && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setRenameTarget({ kind: "variant", id: variant.id, name: variant.name })}
+                              className="text-zinc-400! hover:bg-zinc-100! hover:text-zinc-700! dark:hover:bg-zinc-800! dark:hover:text-zinc-200!"
+                              title="Đổi tên biến thể"
+                            >
+                              <EditIcon className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canDeleteVariant(variant) && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteVariant(variant.id, variant.name)}
+                              disabled={deletingVariantId === variant.id}
+                              className="text-zinc-400! hover:bg-red-50! hover:text-red-600! dark:hover:bg-red-950/40! dark:hover:text-red-400!"
+                              title="Xoá biến thể"
+                            >
+                              {deletingVariantId === variant.id ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
+                            </Button>
+                          )}
+                          <Link
+                            href={`/builds/${buildId}/variants/${variant.id}`}
+                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                            title="Mở biến thể"
+                          >
+                            <ChevronRightIcon className="h-4 w-4" />
+                          </Link>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {copyLinkError && <p className="px-2 pb-1 pt-2 text-xs text-red-600 dark:text-red-400">{copyLinkError}</p>}
+            </Card>
           )}
         </div>
       </div>
@@ -381,31 +419,147 @@ export default function BuildDetailPage() {
         onSubmit={handleRenameSubmit}
       />
 
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} title="Link xem công khai">
-        {sharing && !shareLink && (
-          <div className="flex items-center gap-2 text-sm text-zinc-500">
-            <Spinner className="h-4 w-4" />
-            Đang tạo link...
+      <Dialog open={reuploadDialogOpen} onOpenChange={handleReuploadDialogOpenChange} title="Upload lại — đè lên concept này" size="lg">
+        {reuploadStep === "pick" && (
+          <div className="flex flex-col gap-4">
+            <p className="text-xs text-zinc-500">
+              Chọn zip web-mobile mới. Concept giữ nguyên tên/id — biến thể và link Share hiện có vẫn dùng được sau khi đè.
+            </p>
+            <label className="flex flex-col gap-2 text-sm">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                File .zip của thư mục build <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-zinc-800">web-mobile</code>
+              </span>
+              <label
+                className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-6 text-center transition-colors ${
+                  reuploadFile
+                    ? "border-primary/40 bg-primary-soft"
+                    : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-600"
+                }`}
+              >
+                <UploadCloudIcon className={`h-7 w-7 ${reuploadFile ? "text-primary" : "text-zinc-400"}`} />
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                  {reuploadFile ? reuploadFile.name : <>Kéo thả hoặc <span className="font-medium text-primary">chọn file</span></>}
+                </span>
+                <input type="file" accept=".zip" onChange={(e) => setReuploadFile(e.target.files?.[0] ?? null)} className="hidden" />
+              </label>
+            </label>
+
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">Nén ảnh</span>
+              <select
+                value={reuploadPngMode}
+                onChange={(e) => setReuploadPngMode(e.target.value as ReuploadPngMode)}
+                className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              >
+                {REUPLOAD_PNG_MODES.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {reuploadError && <p className="text-sm text-red-600 dark:text-red-400">{reuploadError}</p>}
+
+            <Button type="button" onClick={handlePreviewReupload} disabled={!reuploadFile} className="self-start">
+              Xem thay đổi
+            </Button>
           </div>
         )}
 
-        {shareError && <p className="text-sm text-red-600 dark:text-red-400">{shareError}</p>}
+        {reuploadStep === "previewing" && (
+          <div className="flex items-center gap-2 text-sm text-zinc-500">
+            <Spinner className="h-4 w-4" />
+            Đang tải lên và quét config...
+          </div>
+        )}
 
-        {shareUrl && (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-zinc-500">
-              Ai có link này đều xem được (không cần đăng nhập), hết hạn ngày{" "}
-              {shareLink?.expiresAt && new Date(shareLink.expiresAt).toLocaleString("vi-VN")}.
-            </p>
-            <div className="flex items-center gap-2">
-              <Input readOnly value={shareUrl} onFocus={(e) => e.target.select()} className="flex-1 font-mono text-xs" />
-              <Button type="button" variant="outline" size="sm" onClick={handleCopyShareUrl}>
-                {linkCopied ? "Đã copy" : "Copy"}
+        {reuploadStep === "diff" && reuploadDiff && (
+          <div className="flex flex-col gap-4">
+            {reuploadDiff.added.length === 0 && reuploadDiff.removed.length === 0 && reuploadDiff.changed.length === 0 ? (
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">Không có thay đổi nào về config so với bản hiện tại.</p>
+            ) : (
+              <div className="max-h-[45vh] overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Trạng thái</TableHead>
+                      <TableHead>Field</TableHead>
+                      <TableHead>Chi tiết</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reuploadDiff.added.map((entry) => (
+                      <TableRow key={`added-${entry.key}`}>
+                        <TableCell className="px-3">
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${DIFF_STATUS_PILL.added}`}>
+                            {DIFF_STATUS_LABEL.added}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-3 font-mono text-xs">
+                          {entry.className}.{entry.propName}
+                        </TableCell>
+                        <TableCell className="px-3 text-xs text-zinc-500">{fieldDetail(entry)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {reuploadDiff.changed.map((change) => (
+                      <TableRow key={`changed-${change.key}`}>
+                        <TableCell className="px-3">
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${DIFF_STATUS_PILL.changed}`}>
+                            {DIFF_STATUS_LABEL.changed}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-3 font-mono text-xs">
+                          {change.className}.{change.propName}
+                        </TableCell>
+                        <TableCell className="px-3 text-xs text-zinc-500">{changeDetail(change)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {reuploadDiff.removed.map((entry) => {
+                      const affected = reuploadAffectedVariants.find((a) => a.key === entry.key);
+                      return (
+                        <TableRow key={`removed-${entry.key}`}>
+                          <TableCell className="px-3 align-top">
+                            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${DIFF_STATUS_PILL.removed}`}>
+                              {DIFF_STATUS_LABEL.removed}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-3 align-top font-mono text-xs">
+                            {entry.className}.{entry.propName}
+                          </TableCell>
+                          <TableCell className="px-3 align-top text-xs text-zinc-500">
+                            {fieldDetail(entry)}
+                            {affected && (
+                              <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                                Biến thể đang dùng: {affected.variantNames.join(", ")} — override field này sẽ hết tác dụng sau khi đè.
+                              </p>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            {reuploadError && <p className="text-sm text-red-600 dark:text-red-400">{reuploadError}</p>}
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={handleCancelReupload}>
+                Huỷ
+              </Button>
+              <Button type="button" variant="danger" size="sm" onClick={handleConfirmReupload}>
+                Xác nhận đè bản build mới
               </Button>
             </div>
-            <Button type="button" variant="danger" size="sm" onClick={handleRevokeAndClose} loading={sharing} className="self-start">
-              Thu hồi link
-            </Button>
+          </div>
+        )}
+
+        {reuploadStep === "confirming" && (
+          <div className="flex items-center gap-2 text-sm text-zinc-500">
+            <Spinner className="h-4 w-4" />
+            Đang xác nhận...
           </div>
         )}
       </Dialog>

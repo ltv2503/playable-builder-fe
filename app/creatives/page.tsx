@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { ChevronRightIcon, GamesIcon, PlusIcon } from "@/components/icons";
 import { EmptyState } from "@/components/EmptyState";
-import { PageLoading } from "@/components/Spinner";
+import { PageLoading, Spinner } from "@/components/Spinner";
 import { GameIcon } from "@/components/GameIcon";
+import { routes } from "@/lib/routes";
 import { useGamesPage } from "./useGamesPage";
 
 export default function GamesPage() {
@@ -16,12 +17,12 @@ export default function GamesPage() {
     <main className="flex w-full flex-1 flex-col gap-6 px-8 py-10">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Games</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Creatives</h1>
           <p className="mt-1 text-sm text-zinc-500">Quản lý playable ads theo từng game.</p>
         </div>
         {canCreate && (
           <Link
-            href="/games/new"
+            href={routes.creativeNew}
             className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm shadow-orange-900/10 transition-colors hover:bg-primary-hover"
           >
             <PlusIcon className="h-4 w-4" />
@@ -33,6 +34,12 @@ export default function GamesPage() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
+        {!games && !error && (
+          <div className="flex justify-center py-10">
+            <Spinner className="h-6 w-6" />
+          </div>
+        )}
+
         {games && games.length === 0 && (
           <EmptyState
             icon={<GamesIcon className="h-10 w-10" />}
@@ -40,7 +47,7 @@ export default function GamesPage() {
             description="Tạo game đầu tiên để bắt đầu upload và quản lý playable ads."
             action={
               canCreate ? (
-                <Link href="/games/new" className="text-sm font-medium text-primary hover:underline">
+                <Link href={routes.creativeNew} className="text-sm font-medium text-primary hover:underline">
                   + Tạo game
                 </Link>
               ) : undefined
@@ -53,7 +60,7 @@ export default function GamesPage() {
             {games.map((game) => (
               <Link
                 key={game.id}
-                href={`/games/${game.id}`}
+                href={routes.creative(game.id)}
                 className="group flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-900/5 transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
               >
                 <div className="flex items-start justify-between">

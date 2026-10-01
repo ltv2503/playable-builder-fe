@@ -27,17 +27,18 @@ export interface ApiUser {
   updatedAt: string;
 }
 
+/** name/androidUrl/iosUrl/iconUrl luôn tra live từ GameCatalogEntry theo packageName (xem GamesService.withCatalogData) — không snapshot, đổi ở All Games là phản ánh ngay. */
 export interface ApiGame {
   id: string;
-  name: string;
   slug: string;
-  androidUrl: string | null;
-  iosUrl: string | null;
-  packageName: string | null;
-  iconUrl: string | null;
+  packageName: string;
   ownerId: string;
   createdAt: string;
   updatedAt: string;
+  name: string;
+  androidUrl: string | null;
+  iosUrl: string | null;
+  iconUrl: string | null;
 }
 
 /** 1 row "tất cả game của công ty" (import từ file JSON export ngoài, xem playable-builder/src/scripts/seed-game-catalog.ts). */
@@ -169,8 +170,6 @@ export const api = {
 
   listGames: (token: string) => apiGet<ApiGame[]>("/games", authHeader(token)),
   getGame: (token: string, id: string) => apiGet<ApiGame>(`/games/${id}`, authHeader(token)),
-  updateGame: (token: string, id: string, data: Partial<{ name: string; androidUrl: string; iosUrl: string }>) =>
-    apiPatch<ApiGame>(`/games/${id}`, data, authHeader(token)),
 
   listGameCatalog: (token: string) => apiGet<ApiGameCatalogEntry[]>("/game-catalog", authHeader(token)),
   createGameFromCatalog: (token: string, catalogEntryId: string) =>
@@ -189,6 +188,8 @@ export const api = {
   getBuild: (token: string, id: string) => apiGet<ApiBuild>(`/builds/${id}`, authHeader(token)),
   deleteBuild: (token: string, id: string) => apiDelete<void>(`/builds/${id}`, authHeader(token)),
   renameBuild: (token: string, id: string, name: string) => apiPatch<ApiBuild>(`/builds/${id}`, { name }, authHeader(token)),
+  moveBuild: (token: string, id: string, gameId: string) => apiPatch<ApiBuild>(`/builds/${id}/move`, { gameId }, authHeader(token)),
+  duplicateBuild: (token: string, id: string) => apiPost<ApiBuild>(`/builds/${id}/duplicate`, {}, authHeader(token)),
   uploadBuild: (
     token: string,
     gameId: string,

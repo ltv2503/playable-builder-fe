@@ -8,6 +8,7 @@ import { api, exportBuild, type ApiReuploadPreview, type ApiVariant } from "@/li
 import { can, canOnResource } from "@/lib/auth/permissions";
 import { swrKeys } from "@/lib/api/swr-keys";
 import { diffFieldsRegistry, variantsAffectedByRemoval, type FieldsRegistryDiff } from "@/lib/cocos/fieldsRegistryDiff";
+import { routes } from "@/lib/routes";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -38,6 +39,8 @@ export function useBuildDetailPage() {
     api.listNetworks(session!.accessToken),
   );
 
+  const { data: games } = useSWR(session ? swrKeys.games() : null, () => api.listGames(session!.accessToken));
+
   const firstError = buildError ?? variantsError;
   const error = firstError ? (firstError instanceof Error ? firstError.message : String(firstError)) : null;
 
@@ -61,6 +64,7 @@ export function useBuildDetailPage() {
   const perms = session?.permissions ?? null;
   const userId = session?.user.id;
   const canCreateVariant = can(perms, "variant:create");
+  const canCreateConcept = can(perms, "concept:create");
   const canExport = can(perms, "export");
   const canEditThisBuild = !!build && canOnResource(perms, "concept", "edit", build.createdById, userId);
   const canDeleteThisBuild = !!build && canOnResource(perms, "concept", "delete", build.createdById, userId);
@@ -110,7 +114,7 @@ export function useBuildDetailPage() {
       }
       setCopyingVariantId(null);
     }
-    await navigator.clipboard.writeText(`${window.location.origin}/share/${token}`);
+    await navigator.clipboard.writeText(`${window.location.origin}${routes.share(token)}`);
     setCopiedVariantId(variant.id);
     setTimeout(() => setCopiedVariantId((id) => (id === variant.id ? null : id)), 2000);
   };
@@ -217,7 +221,7 @@ export function useBuildDetailPage() {
   const deleteBuild = async () => {
     if (!session) return;
     await api.deleteBuild(session.accessToken, buildId);
-    router.push(`/games/${build?.gameId}`);
+    if (build) router.push(routes.creative(build.gameId));
   };
 
   const renameBuild = async (name: string) => {
@@ -226,13 +230,30 @@ export function useBuildDetailPage() {
     mutateBuild(updated, { revalidate: false });
   };
 
+  const moveBuild = async (gameId: string) => {
+    if (!session) return;
+    const updated = await api.moveBuild(session.accessToken, buildId, gameId);
+    mutateBuild(updated, { revalidate: false });
+  };
+
+  /** Nhân bản cả concept (kèm toàn bộ biến thể) — build lại từ đầu nên trả về ngay với status PENDING, điều hướng sang trang concept mới để tự poll như lúc upload. */
+  const duplicateBuild = async () => {
+    if (!session) return;
+    const created = await api.duplicateBuild(session.accessToken, buildId);
+    router.push(routes.build(created.id));
+  };
+
+  const game = (games ?? []).find((g) => g.id === build?.gameId) ?? null;
+
   return {
     session,
     buildId,
     build: build ?? null,
+    game,
     variants: variants ?? null,
     error,
     canCreateVariant,
+    canCreateConcept,
     canExport,
     canEditThisBuild,
     canDeleteThisBuild,
@@ -259,6 +280,9 @@ export function useBuildDetailPage() {
     duplicateVariant,
     deleteBuild,
     renameBuild,
+    moveBuild,
+    duplicateBuild,
+    games: games ?? [],
     reuploadDialogOpen,
     reuploadStep,
     reuploadFile,

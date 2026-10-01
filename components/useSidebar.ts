@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
+import { routes } from "@/lib/routes";
 
 export interface SidebarNavItem {
   id: "games" | "all-games" | "admin";
@@ -11,14 +12,14 @@ export interface SidebarNavItem {
 }
 
 const NAV_ITEMS: SidebarNavItem[] = [
-  { id: "games", label: "Games", href: "/games" },
-  { id: "all-games", label: "All Games", href: "/all-games" },
+  { id: "games", label: "Creatives", href: routes.creatives },
+  { id: "all-games", label: "All Games", href: routes.allGames },
 ];
 
 const ADMIN_NAV_ITEM: SidebarNavItem = {
   id: "admin",
   label: "Quản trị",
-  href: "/admin",
+  href: routes.admin,
 };
 
 /** Riêng của trình duyệt người dùng đó, không cần đồng bộ server — localStorage là đủ. */
@@ -52,11 +53,11 @@ export function useSidebar() {
   };
 
   const isActive = (href: string): boolean =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    href === routes.home ? pathname === routes.home : pathname.startsWith(href);
 
   const handleLogout = async () => {
     await logout();
-    router.replace("/login");
+    router.replace(routes.login);
   };
 
   const navItems =

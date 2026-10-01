@@ -7,6 +7,7 @@ import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { api } from "@/lib/api";
 import { listPngImagesInZip, type ZipPngEntry } from "@/lib/cocos/zipPngPreview";
 import { swrKeys } from "@/lib/api/swr-keys";
+import { routes } from "@/lib/routes";
 
 export type PngMode = "off" | "palette" | "webp";
 
@@ -67,7 +68,7 @@ export function useNewConceptPage() {
       // trang này để mutate(key) trần biết cách lấy lại dữ liệu (xem giải thích ở
       // useNewVariantPage.ts).
       await mutate(swrKeys.builds(gameId), () => api.listBuilds(session.accessToken, gameId));
-      router.push(`/builds/${build.id}`);
+      router.push(routes.build(build.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setUploading(false);

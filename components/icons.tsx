@@ -135,6 +135,14 @@ export function DuplicateIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+export function MoveIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5h9m0 0L8.25 3.75M12 7.5l-3.75 3.75M21 16.5h-9m0 0 3.75-3.75M12 16.5l3.75 3.75" />
+    </svg>
+  );
+}
+
 export function EditIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">

@@ -6,6 +6,7 @@ import useSWR, { mutate } from "swr";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { api } from "@/lib/api";
 import { swrKeys } from "@/lib/api/swr-keys";
+import { routes } from "@/lib/routes";
 
 /**
  * Chọn từ "All Games" (tất cả game của công ty, xem app/all-games) — không còn
@@ -47,7 +48,7 @@ export function useNewGamePage() {
       // lấy lại được dữ liệu mới dù subscriber (useSWR ở trên) có unmount trước
       // khi revalidate xong hay không (xem cùng pattern ở useNewConceptPage.ts).
       await mutate(swrKeys.games(), () => api.listGames(session.accessToken));
-      router.push(`/games/${game.id}`);
+      router.push(routes.creative(game.id));
     } catch (e) {
       setCatalogError(e instanceof Error ? e.message : String(e));
       setAddingId(null);

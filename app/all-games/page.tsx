@@ -19,7 +19,8 @@ export default function AllGamesPage() {
   const {
     session,
     isLoading,
-    isAdmin,
+    canManage,
+    canDelete,
     search,
     setSearch,
     filteredCatalog,
@@ -53,7 +54,7 @@ export default function AllGamesPage() {
             {search ? ` / ${totalCount}` : ""} game{totalCount !== 1 ? "s" : ""} của công ty — nguồn để chọn khi thêm game ở trang Games.
           </p>
         </div>
-        {isAdmin && (
+        {canManage && (
           <Button type="button" onClick={openAdd}>
             <PlusIcon className="h-4 w-4" />
             Thêm game
@@ -70,7 +71,7 @@ export default function AllGamesPage() {
           <EmptyState
             icon={<GamesIcon className="h-10 w-10" />}
             title={search ? "Không tìm thấy game nào" : "Chưa có game nào"}
-            description={search ? "Thử từ khoá khác." : isAdmin ? 'Bấm "Thêm game" để bắt đầu.' : undefined}
+            description={search ? "Thử từ khoá khác." : canManage ? 'Bấm "Thêm game" để bắt đầu.' : undefined}
           />
         )}
 
@@ -90,7 +91,7 @@ export default function AllGamesPage() {
                   <TableHead align="center" className="w-24">
                     Trạng thái
                   </TableHead>
-                  {isAdmin && <TableHead align="right" className="w-20" />}
+                  {(canManage || canDelete) && <TableHead align="right" className="w-20" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -147,29 +148,33 @@ export default function AllGamesPage() {
                         {entry.inhouse ? "Inhouse" : "Publish"}
                       </span>
                     </TableCell>
-                    {isAdmin && (
+                    {(canManage || canDelete) && (
                       <TableCell align="right">
                         <div className="flex justify-end gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            title="Sửa"
-                            onClick={() => openEdit(entry)}
-                            className="text-zinc-400! hover:bg-zinc-100! hover:text-primary! dark:hover:bg-zinc-800!"
-                          >
-                            <EditIcon className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            title="Xoá"
-                            onClick={() => handleDelete(entry)}
-                            className="text-zinc-400! hover:bg-red-50! hover:text-red-600! dark:hover:bg-red-950/40!"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </Button>
+                          {canManage && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title="Sửa"
+                              onClick={() => openEdit(entry)}
+                              className="text-zinc-400! hover:bg-zinc-100! hover:text-primary! dark:hover:bg-zinc-800!"
+                            >
+                              <EditIcon className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title="Xoá"
+                              onClick={() => handleDelete(entry)}
+                              className="text-zinc-400! hover:bg-red-50! hover:text-red-600! dark:hover:bg-red-950/40!"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     )}

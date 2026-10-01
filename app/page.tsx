@@ -1,6 +1,7 @@
 "use client";
 
-
+import { useRequireAuth } from "@/lib/auth/use-require-auth";
+import { PageLoading } from "@/components/Spinner";
 
 /**
  * All override kinds (boolean/number/string *and* spriteFrame) go through
@@ -16,6 +17,9 @@
 
 export default function Home()
 {
+  const session = useRequireAuth();
+
+  if (!session) return <PageLoading />;
 
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-black">

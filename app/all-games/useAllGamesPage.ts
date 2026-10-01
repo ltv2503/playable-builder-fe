@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { api, type ApiGameCatalogEntry, type CreateGameCatalogEntryInput } from "@/lib/api";
+import { can } from "@/lib/auth/permissions";
 import { swrKeys } from "@/lib/api/swr-keys";
 
 const EMPTY_FORM: CreateGameCatalogEntryInput = {
@@ -47,7 +48,8 @@ function toPayload(form: CreateGameCatalogEntryInput): CreateGameCatalogEntryInp
 
 export function useAllGamesPage() {
   const session = useRequireAuth();
-  const isAdmin = session?.user.role === "ADMIN";
+  const canManage = can(session?.permissions ?? null, "all-games:manage");
+  const canDelete = can(session?.permissions ?? null, "all-games:delete");
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -152,7 +154,8 @@ export function useAllGamesPage() {
   return {
     session,
     isLoading: !!session && catalog === undefined && !swrError,
-    isAdmin,
+    canManage,
+    canDelete,
     search,
     setSearch,
     filteredCatalog,

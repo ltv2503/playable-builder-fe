@@ -2,22 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button, Card, Checkbox, Dialog, PromptDialog, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/common";
+import { Breadcrumb, Button, Card, Checkbox, Dialog, PromptDialog, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/common";
 import { EmptyState } from "@/components/EmptyState";
 import { PageLoading, Spinner } from "@/components/Spinner";
 import {
-  ArrowLeftIcon,
   ChevronRightIcon,
   DuplicateIcon,
   EditIcon,
   LayersIcon,
+  MoveIcon,
   PlusIcon,
   RocketIcon,
   TrashIcon,
   UploadCloudIcon,
 } from "@/components/icons";
 import type { FieldDiffChange, FieldDiffEntry } from "@/lib/cocos/fieldsRegistryDiff";
+import { routes } from "@/lib/routes";
 import { useBuildDetailPage, type ReuploadPngMode } from "./useBuildDetailPage";
 
 const REUPLOAD_PNG_MODES: { value: ReuploadPngMode; label: string }[] = [
@@ -53,13 +55,16 @@ function changeDetail(change: FieldDiffChange): string {
 type RenameTarget = { kind: "build" } | { kind: "variant"; id: string; name: string };
 
 export default function BuildDetailPage() {
+  const router = useRouter();
   const {
     session,
     buildId,
     build,
+    game,
     variants,
     error,
     canCreateVariant,
+    canCreateConcept,
     canExport,
     canEditThisBuild,
     canDeleteThisBuild,
@@ -86,6 +91,9 @@ export default function BuildDetailPage() {
     duplicateVariant,
     deleteBuild,
     renameBuild,
+    moveBuild,
+    duplicateBuild,
+    games,
     reuploadDialogOpen,
     reuploadStep,
     reuploadFile,
@@ -105,7 +113,12 @@ export default function BuildDetailPage() {
   const [deletingBuild, setDeletingBuild] = useState(false);
   const [deletingVariantId, setDeletingVariantId] = useState<string | null>(null);
   const [duplicatingVariantId, setDuplicatingVariantId] = useState<string | null>(null);
+  const [duplicatingBuild, setDuplicatingBuild] = useState(false);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [moveTargetGameId, setMoveTargetGameId] = useState("");
+  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   const handleDeleteBuild = async () => {
     if (!build || !confirm(`Xoá concept "${build.name}"? Mọi biến thể và bản build của nó cũng sẽ bị xoá.`)) return;
@@ -115,6 +128,36 @@ export default function BuildDetailPage() {
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
       setDeletingBuild(false);
+    }
+  };
+
+  const handleDuplicateBuild = async () => {
+    setDuplicatingBuild(true);
+    try {
+      await duplicateBuild();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+      setDuplicatingBuild(false);
+    }
+  };
+
+  const openMoveDialog = () => {
+    setMoveError(null);
+    setMoveTargetGameId("");
+    setMoveDialogOpen(true);
+  };
+
+  const handleMoveSubmit = async () => {
+    if (!moveTargetGameId) return;
+    setMoving(true);
+    setMoveError(null);
+    try {
+      await moveBuild(moveTargetGameId);
+      setMoveDialogOpen(false);
+    } catch (err) {
+      setMoveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -160,13 +203,13 @@ export default function BuildDetailPage() {
     <main className="flex w-full flex-1 flex-col gap-6 px-8 py-10">
       <div className="flex items-start justify-between">
         <div>
-          <Link
-            href={`/games/${build.gameId}`}
-            className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-          >
-            <ArrowLeftIcon className="h-3.5 w-3.5" />
-            Quay lại game
-          </Link>
+          <Breadcrumb
+            items={[
+              { label: "Creatives", href: routes.creatives },
+              { label: game?.name ?? "...", href: routes.creative(build.gameId) },
+              { label: build.name },
+            ]}
+          />
           <div className="mt-1 flex flex-wrap items-center gap-2.5">
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{build.name}</h1>
             <StatusBadge status={build.status} />
@@ -188,6 +231,18 @@ export default function BuildDetailPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {canCreateConcept && (
+            <Button variant="secondary" size="sm" onClick={handleDuplicateBuild} loading={duplicatingBuild}>
+              <DuplicateIcon className="h-4 w-4" />
+              Nhân bản
+            </Button>
+          )}
+          {canEditThisBuild && (
+            <Button variant="secondary" size="sm" onClick={openMoveDialog}>
+              <MoveIcon className="h-4 w-4" />
+              Chuyển game
+            </Button>
+          )}
           {canEditThisBuild && (
             <Button variant="secondary" size="sm" onClick={openReuploadDialog}>
               <UploadCloudIcon className="h-4 w-4" />
@@ -298,7 +353,7 @@ export default function BuildDetailPage() {
             </div>
             {canCreateVariant && build.status === "SUCCESS" && (
               <Link
-                href={`/builds/${buildId}/variants/new`}
+                href={routes.buildVariantNew(buildId)}
                 className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-orange-900/10 hover:bg-primary-hover"
               >
                 <PlusIcon className="h-3.5 w-3.5" />
@@ -306,6 +361,12 @@ export default function BuildDetailPage() {
               </Link>
             )}
           </div>
+
+          {!variants && !error && (
+            <div className="flex justify-center py-10">
+              <Spinner className="h-6 w-6" />
+            </div>
+          )}
 
           {variants && variants.length === 0 && (
             <EmptyState
@@ -329,18 +390,17 @@ export default function BuildDetailPage() {
                 </TableHeader>
                 <TableBody>
                   {variants.map((variant) => (
-                    <TableRow key={variant.id}>
+                    <TableRow
+                      key={variant.id}
+                      onClick={() => router.push(routes.buildVariant(buildId, variant.id))}
+                      className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+                    >
                       <TableCell>
-                        <Link
-                          href={`/builds/${buildId}/variants/${variant.id}`}
-                          className="font-medium text-zinc-900 hover:text-primary dark:text-zinc-50"
-                        >
-                          {variant.name}
-                        </Link>
+                        <span className="font-medium text-zinc-900 dark:text-zinc-50">{variant.name}</span>
                       </TableCell>
                       <TableCell className="text-xs text-zinc-500">{variant.createdBy.name || variant.createdBy.email}</TableCell>
                       <TableCell className="text-xs text-zinc-500">{new Date(variant.updatedAt).toLocaleString("vi-VN")}</TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <Button
                           type="button"
                           variant="outline"
@@ -351,7 +411,7 @@ export default function BuildDetailPage() {
                           {copiedVariantId === variant.id ? "Đã copy" : "Copy link"}
                         </Button>
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end gap-1">
                           {canCreateVariant && (
                             <Button
@@ -391,13 +451,7 @@ export default function BuildDetailPage() {
                               {deletingVariantId === variant.id ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
                             </Button>
                           )}
-                          <Link
-                            href={`/builds/${buildId}/variants/${variant.id}`}
-                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                            title="Mở biến thể"
-                          >
-                            <ChevronRightIcon className="h-4 w-4" />
-                          </Link>
+                          <ChevronRightIcon className="h-4 w-4 text-zinc-300 dark:text-zinc-700" />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -418,6 +472,34 @@ export default function BuildDetailPage() {
         initialValue={renameTarget?.kind === "build" ? build.name : (renameTarget?.name ?? "")}
         onSubmit={handleRenameSubmit}
       />
+
+      <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen} title="Chuyển concept sang game khác">
+        <div className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">Game đích</span>
+            <select
+              value={moveTargetGameId}
+              onChange={(e) => setMoveTargetGameId(e.target.value)}
+              className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            >
+              <option value="">Chọn game...</option>
+              {games
+                .filter((g) => g.id !== build.gameId)
+                .map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+
+          {moveError && <p className="text-sm text-red-600 dark:text-red-400">{moveError}</p>}
+
+          <Button type="button" onClick={handleMoveSubmit} disabled={!moveTargetGameId} loading={moving} className="self-start">
+            Chuyển concept
+          </Button>
+        </div>
+      </Dialog>
 
       <Dialog open={reuploadDialogOpen} onOpenChange={handleReuploadDialogOpenChange} title="Upload lại — đè lên concept này" size="lg">
         {reuploadStep === "pick" && (

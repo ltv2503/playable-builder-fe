@@ -1,5 +1,8 @@
 export function Spinner({ className = "h-5 w-5" }: { className?: string }) {
-  return <div className={`animate-spin rounded-full border-2 border-zinc-200 border-t-primary dark:border-zinc-800 ${className}`} />;
+  // border-*! (important): globals.css's "* { border-color: ... }" nằm ngoài @layer nên theo cascade
+  // layers luôn thắng mọi utility Tailwind (dù utility đứng sau trong source) — thiếu "!" thì 4 cạnh
+  // border bị ép về cùng 1 màu, animate-spin vẫn chạy nhưng vòng tròn đồng màu xoay nhìn y hệt đứng yên.
+  return <div className={`animate-spin rounded-full border-2 border-zinc-200! border-t-primary! dark:border-zinc-800! ${className}`} />;
 }
 
 export function PageLoading() {

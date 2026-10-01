@@ -5,6 +5,8 @@
 export type PermKey =
   | "game:manage"
   | "game:delete"
+  | "all-games:manage"
+  | "all-games:delete"
   | "concept:create"
   | "concept:edit_own"
   | "concept:edit_any"

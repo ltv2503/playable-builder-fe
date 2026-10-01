@@ -13,6 +13,7 @@ import {
 import { PageLoading, Spinner } from "@/components/Spinner";
 import { PlaygroundConfigForm } from "@/components/PlaygroundConfigForm";
 import DeviceFrame from "@/components/Preview/DeviceFrame";
+import { routes } from "@/lib/routes";
 
 import { useVariantEditorPage } from "./useVariantEditorPage";
 
@@ -88,7 +89,7 @@ export default function VariantEditorPage() {
     el.style.transform = "rotate(0deg)";
   }, [rotated]);
 
-  const shareUrl = shareLink && typeof window !== "undefined" ? `${window.location.origin}/share/${shareLink.token}` : null;
+  const shareUrl = shareLink && typeof window !== "undefined" ? `${window.location.origin}${routes.share(shareLink.token)}` : null;
 
   const handleOpenShareDialog = () => {
     setShareDialogOpen(true);
@@ -163,7 +164,7 @@ export default function VariantEditorPage() {
       <div className="flex shrink-0 items-center justify-between">
         <div>
           <Link
-            href={`/builds/${buildId}`}
+            href={routes.build(buildId)}
             className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
           >
             <ArrowLeftIcon className="h-3.5 w-3.5" />
@@ -218,6 +219,12 @@ export default function VariantEditorPage() {
       {loadError && (
         <div className="shrink-0 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           {loadError}
+        </div>
+      )}
+
+      {!previewUrl && !loadError && (
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <Spinner className="h-8 w-8" />
         </div>
       )}
 

@@ -16,6 +16,7 @@ import {
 } from "@/lib/cocos/playgroundConfig";
 import { can, canOnResource } from "@/lib/auth/permissions";
 import { swrKeys } from "@/lib/api/swr-keys";
+import { routes } from "@/lib/routes";
 
 /** Debounce trước khi reload preview — gõ số/text không bị giật lại mỗi phím. */
 const PREVIEW_DEBOUNCE_MS = 500;
@@ -251,7 +252,7 @@ export function useVariantEditorPage() {
       });
 
       setSaved(true);
-      router.push(`/builds/${buildId}`);
+      router.push(routes.build(buildId));
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
     } finally {

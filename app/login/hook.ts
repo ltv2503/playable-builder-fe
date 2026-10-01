@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
+import { routes } from "@/lib/routes";
 
 const useLogin = () => {
   const { user, loading, loginWithGoogle } = useAuth();
@@ -11,7 +12,7 @@ const useLogin = () => {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const redirectTo = searchParams.get("redirect") ?? "/games";
+  const redirectTo = searchParams.get("redirect") ?? routes.creatives;
 
   // Đã đăng nhập từ trước (JWT còn trong localStorage) thì khỏi ở lại trang login.
   useEffect(() => {

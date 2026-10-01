@@ -6,6 +6,7 @@ import { mutate } from "swr";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { api } from "@/lib/api";
 import { swrKeys } from "@/lib/api/swr-keys";
+import { routes } from "@/lib/routes";
 
 export function useNewVariantPage() {
   const { id: buildId } = useParams<{ id: string }>();
@@ -28,7 +29,7 @@ export function useNewVariantPage() {
       // biến thể nằm ở trang build detail, đã unmount). Phải tự truyền fetcher
       // thì mutate mới có cách nào để lấy lại dữ liệu mới.
       await mutate(swrKeys.variants(buildId), () => api.listVariants(session.accessToken, buildId));
-      router.push(`/builds/${buildId}/variants/${variant.id}`);
+      router.push(routes.buildVariant(buildId, variant.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setCreating(false);

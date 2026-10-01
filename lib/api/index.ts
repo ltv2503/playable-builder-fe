@@ -309,15 +309,15 @@ export async function openOrDownloadArtifact(token: string, artifact: ApiBuildAr
 }
 
 /**
- * Build on-demand cho 1/nhiều network được chọn (không lưu lại trên server —
- * xem builds.service.ts's exportBuild) rồi tải thẳng về máy. 1 network trả
- * đúng file đó (html mở tab mới để xem trước khi tải, zip tải luôn); nhiều
- * network server tự gộp thành 1 export.zip, luôn tải file. `variantId` tuỳ
- * chọn: vá config của biến thể đó vào trước khi export.
+ * Build on-demand cho 1/nhiều network × 1/nhiều biến thể được chọn CÙNG LÚC (1 request duy nhất, không
+ * lưu lại trên server — xem builds.service.ts's exportBuild) rồi tải thẳng về máy — luôn tải file, không
+ * mở tab preview (xem openVariantPreview() riêng cho mục đích xem trước). Tổng cộng 1 file (1 network × 1
+ * biến thể) -> trả đúng file đó (html/zip); nhiều hơn -> server tự gộp hết vào 1 zip. `variantIds`: `""` =
+ * "Mặc định (engine)", còn lại là id biến thể thật — khớp đúng kiểu `selectedVariantIds` ở
+ * useBuildDetailPage.ts, không cần transform gì thêm trước khi gọi.
  */
-export async function exportBuild(token: string, buildId: string, networks: string[], variantId?: string): Promise<void> {
-  const params = new URLSearchParams({ networks: networks.join(",") });
-  if (variantId) params.set("variantId", variantId);
+export async function exportBuild(token: string, buildId: string, networks: string[], variantIds: string[]): Promise<void> {
+  const params = new URLSearchParams({ networks: networks.join(","), variantIds: variantIds.join(",") });
   const res = await fetch(`${API_URL}/builds/${buildId}/export?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -332,14 +332,10 @@ export async function exportBuild(token: string, buildId: string, networks: stri
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
 
-  if (networks.length === 1 && fileName.endsWith(".html")) {
-    window.open(url, "_blank");
-  } else {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    a.click();
-  }
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 

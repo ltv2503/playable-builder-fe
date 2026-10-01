@@ -281,7 +281,7 @@ export default function BuildDetailPage() {
 
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-zinc-500">Dùng config của (mỗi cái export riêng 1 file/zip)</span>
+                <span className="text-xs font-medium text-zinc-500">Dùng config của (gộp chung vào 1 lần export)</span>
                 <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
                   <Checkbox className="h-3.5 w-3.5" checked={allVariantsSelected} onChange={toggleAllVariants} />
                   Chọn tất cả

@@ -184,15 +184,13 @@ export function useBuildDetailPage() {
     else void handleCancelReupload();
   };
 
-  /** Mỗi biến thể đã chọn export riêng 1 file/zip (tải tuần tự, không dồn hết vào 1 file) — chọn "Mặc định (engine)" ("") thì export thêm 1 bản không vá config nào. */
+  /** 1 request duy nhất cho mọi network × mọi biến thể đã chọn (server tự gộp thành 1 file/zip) — chọn "Mặc định (engine)" ("") thì export thêm 1 bản không vá config nào. */
   const handleExport = async () => {
     if (!session || selectedNetworks.length === 0 || selectedVariantIds.length === 0) return;
     setExporting(true);
     setExportError(null);
     try {
-      for (const variantId of selectedVariantIds) {
-        await exportBuild(session.accessToken, buildId, selectedNetworks, variantId || undefined);
-      }
+      await exportBuild(session.accessToken, buildId, selectedNetworks, selectedVariantIds);
     } catch (e) {
       setExportError(e instanceof Error ? e.message : String(e));
     } finally {

@@ -47,8 +47,9 @@ constants/
   form tự đoán lại qua `inferFieldType()` (y hệt logic backend) để không vỡ với build cũ.
 - **Export chọn nhiều config**: `builds/[id]/page.tsx`'s "Dùng config của" là multi-select (pill giống Ad network, không phải `<select>` đơn nữa)
   — `useBuildDetailPage.ts`'s `selectedVariantIds: string[]` (`""` = "Mặc định (engine)", cùng danh sách chọn với biến thể thật).
-  `handleExport()` gọi `exportBuild()` TUẦN TỰ (await từng cái) cho mỗi id đã chọn — backend không đổi gì (endpoint export vốn đã nhận đúng 1
-  `variantId`/lần gọi), mỗi lần gọi là 1 lần tải file/zip riêng, không dồn tất cả biến thể vào 1 file.
+  `handleExport()` gọi `exportBuild()` ĐÚNG 1 LẦN với cả `networks` lẫn `selectedVariantIds` — backend (`GET /builds/:id/export?networks=...&variantIds=...`,
+  xem `BuildsService.exportBuild`) tự gộp hết network × biến thể vào 1 file/zip duy nhất, phần nặng nhất (tải single-html + nén resource) chỉ làm
+  1 lần cho cả batch thay vì lặp lại theo từng biến thể như trước (từng là nguyên nhân export nhiều config bị chậm).
 - **Link xem công khai** (nút "Share"): `POST/DELETE /builds/:id/share` (bản gốc, ở `builds/[id]/page.tsx`) hoặc `POST/DELETE
   /variants/:id/share` (đúng 1 biến thể, ở variant editor) — cả 2 cần quyền `"share"`, có Bearer token như mọi route khác, trả về
   `{ token, expiresAt }` — FE tự ráp URL đầy đủ bằng `window.location.origin` (không lưu domain cứng). Người xem mở `/share/[token]/page.tsx` —

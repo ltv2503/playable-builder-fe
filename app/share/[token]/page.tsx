@@ -4,8 +4,9 @@ import { resolveSharedPreviewLink, type ResolvedSharedPreview } from "@/lib/api"
 /**
  * Route public (không cần đăng nhập playable-tool — xem useAuthGate.ts's PUBLIC_ROUTE_PREFIXES) — nút
  * "Share" ở builds/[id] và variant editor tạo ra link dạng /share/<token>. Server Component: resolve
- * token ở server (không qua fetch()/CORS phía client), rồi render thẳng trong <iframe> — người xem ở
- * lại trang playable-tool, không bị điều hướng sang domain storage.
+ * token ở server (không qua fetch()/CORS phía client) ra 1 presigned URL (đã vá sẵn config nếu là share
+ * biến thể — xem SharedPreviewLinksService.resolve()), rồi nhúng thẳng vào <iframe src>. Trang
+ * /share/[token] vẫn ở domain playable-tool, chỉ nội dung BÊN TRONG iframe tải từ domain storage.
  */
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -26,11 +27,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-950">
-      {resolved.kind === "url" ? (
-        <iframe src={resolved.url} title={resolved.buildName} sandbox="allow-scripts allow-same-origin" className="h-full w-full flex-1 border-0" />
-      ) : (
-        <iframe srcDoc={resolved.html} title={resolved.buildName} sandbox="allow-scripts allow-same-origin" className="h-full w-full flex-1 border-0" />
-      )}
+      <iframe src={resolved.url} title={resolved.buildName} sandbox="allow-scripts allow-same-origin" className="h-full w-full flex-1 border-0" />
     </div>
   );
 }

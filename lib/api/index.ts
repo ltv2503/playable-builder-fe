@@ -264,13 +264,16 @@ export interface ApiSharedPreviewLink {
   expiresAt: string | null;
 }
 
-export type ResolvedSharedPreview = { buildName: string } & ({ kind: "url"; url: string } | { kind: "html"; html: string });
+export interface ResolvedSharedPreview {
+  buildName: string;
+  url: string;
+}
 
 /**
- * Route public (không cần token) — gọi từ Server Component app/share/[token]/page.tsx. Bản gốc trả về
- * `{ kind: "url" }` (presigned URL của storage, chưa vá config nào); bản biến thể trả `{ kind: "html" }`
- * (nội dung html đã vá playgroundConfig sẵn ở backend, vì không có object đã-vá nào trên storage để
- * presign) — xem SharedPreviewLinksService.resolve() ở backend.
+ * Route public (không cần token) — gọi từ Server Component app/share/[token]/page.tsx. Luôn trả presigned
+ * URL của storage: bản gốc trỏ thẳng file chưa vá; bản biến thể trỏ bản đã vá playgroundConfig, được
+ * backend cache lại trên storage từ lần share đầu tiên (xem SharedPreviewLinksService.resolve()) — khỏi
+ * phải tải+vá lại full single.html (vài MB) mỗi lượt xem như trước.
  */
 export async function resolveSharedPreviewLink(token: string): Promise<ResolvedSharedPreview> {
   const res = await fetch(`${API_URL}/share/${encodeURIComponent(token)}`, { cache: "no-store" });
